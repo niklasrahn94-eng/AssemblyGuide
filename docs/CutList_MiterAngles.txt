@@ -1,0 +1,459 @@
+CUT LIST - miter angles, machine-ready
+C:\Users\nrahn\Downloads\260728_1zu200 Umgebungsgebäude.3dm
+
+ANGLE CONVENTION
+  The number on the flat layout is HALF THE FOLD ANGLE:
+  90 = square edge, 45 = ordinary square building corner.
+
+      saw tilt = 90 - shown        (0 on your scale = blade square to the face)
+
+  so shown 65 -> set 25,  shown 45 -> set 45,  shown 135 -> flip and set 45.
+  tilt over 45 -> 45 deg JIG, set (tilt - 45).
+
+  Labels on the ...Angles layers:
+     25    set 25, piece as it lies on the board
+     F25   FLIP the piece over, then set 25
+     J7    45 deg JIG, then set 7   (true tilt 52)
+     FJ2   FLIP and JIG, set 2      (true tilt 47)
+     sq    square edge, no bevel
+
+  FLIP already accounts for parts the nest mirrored (21 of them): the flag is
+  relative to the face that is UP as the part lies on the board.
+
+MATCHING
+  board closed curves : 150  (confirmed 131, probable 7, unidentified 11, board outline 1)
+  flat parts          : 141  (found on a board: 138)
+  number dots written : 149      angle dots written: 397
+
+BASE PLATES (labelled with a trailing ?)
+  BP2 -> board curve area 103957 (+2.9% area, -0.2% perimeter) - matched on size only, the outline was edited after nesting
+  BP3 -> board curve area 79749 (+2.3% area, -8.3% perimeter) - matched on size only, the outline was edited after nesting
+  BP1 -> board curve area 35961 (+5.6% area, +0.1% perimeter) - matched on size only, the outline was edited after nesting
+
+*** PARTS NOT ON EITHER BOARD (3) ***
+  7.10, 7.8, 7.9
+  These are in the final model but were never nested - they still have to be cut.
+
+UNIDENTIFIED BOARD CURVES (11), marked X
+  Cut into the board but not one of the 141 final parts - leftovers from an
+  earlier version. Do not use them.
+    Board1 area=     30.32 perim=   27.09  at (1001.5, -473.4)
+    Board1 area=     30.32 perim=   27.09  at (1013.5, -473.4)
+    Board1 area=    366.73 perim=   82.68  at (962.9, -467.9)
+    Board1 area=     47.84 perim=   32.96  at (561.3, -974.8)
+    Board1 area=    283.09 perim=   73.72  at (540.3, -971.1)
+    Board1 area=    285.83 perim=   74.07  at (520.7, -971.0)
+    Board1 area=    359.06 perim=   90.41  at (495.9, -963.2)
+    Board1 area=   2079.45 perim=  215.66  at (463.6, -940.2)
+    Board1 area=   5782.67 perim=  388.09  at (426.6, -902.9)
+    Board1 area=   3914.04 perim=  364.33  at (389.8, -902.9)
+    Board2 area=  62514.77 perim= 2073.37  at (-918.3, -830.6)
+
+==========================================================================
+PER-PART CUT LIST
+==========================================================================
+part     board   mirr   shown   tilt  set    notes
+1.1      Board2  -         55     35  35     
+                           45     45  45     
+1.2      Board2  -         45     45  45     
+                           45     45  45     
+1.3      Board2  -         55     35  35     
+                           45     45  45     
+1.4      Board2  yes       76     14  F14    FLIP over
+                           76     14  F14    FLIP over
+                           55     35  F35    FLIP over
+1.5      Board2  -         76     14  14     
+                           76     14  14     
+1.6      Board2  yes       76     14  F14    FLIP over
+                           76     14  F14    FLIP over
+                           55     35  F35    FLIP over
+1.7      Board2  -         76     14  14     
+                           76     14  14     
+2.1      Board2  -          -      -  -      all edges square
+2.2      Board2  -         53     37  37     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+2.3      Board2  -         70     20  20     
+2.4      Board2  -          -      -  -      all edges square
+2.5      Board2  -         78     12  12     
+                           70     20  20     
+                           45     45  45     
+                           45     45  45     
+                           39     51  J6     45 JIG
+2.6      Board2  -         76     14  14     
+                           45     45  45     
+                           39     51  J6     45 JIG
+2.7      Board2  -         78     12  12     
+2.8      Board2  -         70     20  20     
+                           68     22  22     
+2.9      Board2  -         76     14  14     
+                           70     20  20     
+2.10     Board2  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           90      0  sq     
+                           45     45  45     
+2.11     Board2  -        135     45  F45    FLIP over
+                           90      0  sq     
+                           45     45  45     
+2.12     Board2  -        127     37  F37    FLIP over
+                           53     37  37     
+                           45     45  45     
+                           45     45  45     
+2.13     Board2  -        135     45  F45    FLIP over
+                           75     15  15     
+                           70     20  20     
+3.1      Board2  -         61     29  29     
+                           46     44  44     
+3.2      Board2  yes       90      0  sq     
+                           46     44  F44    FLIP over
+                           45     45  F45    FLIP over
+3.3      Board2  yes       90      0  sq     
+                           45     45  F45    FLIP over
+3.4      Board2  -         61     29  29     
+                           45     45  45     
+3.5      Board2  -         61     29  29     
+                           58     32  32     
+                           45     45  45     
+3.6      Board2  -         61     29  29     
+                           58     32  32     
+4.1      Board1  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+4.2      Board1  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+4.3      Board1  yes      135     45  45     
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+4.4      Board1  -        135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+4.5      Board1  -         45     45  45     
+                           45     45  45     
+4.6      Board1  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+5.1      Board1  -         65     25  25     
+                           45     45  45     
+5.2      Board1  yes       67     23  F23    FLIP over
+                           65     25  F25    FLIP over
+                           45     45  F45    FLIP over
+5.3      Board1  yes       90      0  sq     
+                           67     23  F23    FLIP over
+                           45     45  F45    FLIP over
+5.4      Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+5.5      Board1  -         90      0  sq     
+                           73     17  17     
+5.6      Board1  -         62     28  28     
+                           45     45  45     
+                           45     45  45     
+5.7      Board1  -         73     17  17     
+                           62     28  28     
+                           46     44  44     
+                           45     45  45     
+5.8      Board1  -         45     45  45     
+5.9      Board1  -         46     44  44     
+                           46     44  44     
+                           45     45  45     
+5.10     Board1  yes       47     43  F43    FLIP over
+                           45     45  F45    FLIP over
+5.11     Board1  yes       47     43  F43    FLIP over
+5.12     Board1  -         45     45  45     
+                           45     45  45     
+6.1      Board1  -        137     47  FJ2    FLIP over, 45 JIG
+                           64     26  26     
+                           60     30  30     
+                           52     38  38     
+6.2      Board1  -         66     24  24     
+                           65     25  25     
+                           60     30  30     
+6.3      Board1  -        133     43  F43    FLIP over
+                           65     25  25     
+                           52     38  38     
+6.4      Board1  -         86      4  4      
+                           64     26  26     
+                           40     50  J5     45 JIG
+6.5      Board1  -         66     24  24     
+                           40     50  J5     45 JIG
+6.6      Board1  -        137     47  FJ2    FLIP over, 45 JIG
+                           59     31  31     
+6.7      Board1  -        137     47  FJ2    FLIP over, 45 JIG
+                           44     46  J1     45 JIG
+                           43     47  J2     45 JIG
+6.8      Board1  -         59     31  31     
+                           45     45  45     
+                           43     47  J2     45 JIG
+6.9      Board1  -        135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+6.10     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           59     31  31     
+6.11     Board1  -        135     45  F45    FLIP over
+                           61     29  29     
+                           48     42  42     
+6.12     Board1  -        135     45  F45    FLIP over
+                           61     29  29     
+                           59     31  31     
+                           59     31  31     
+                           59     31  31     
+                           45     45  45     
+                           44     46  J1     45 JIG
+                           42     48  J3     45 JIG
+6.13     Board1  -         62     28  28     
+                           51     39  39     
+                           42     48  J3     45 JIG
+6.14     Board1  -        132     42  F42    FLIP over
+                           51     39  39     
+                           47     43  43     
+6.15     Board1  -        136     46  FJ1    FLIP over, 45 JIG
+                          132     42  F42    FLIP over
+                           62     28  28     
+6.16     Board1  -        136     46  FJ1    FLIP over, 45 JIG
+                           45     45  45     
+                           44     46  J1     45 JIG
+6.17     Board1  -         62     28  28     
+                           45     45  45     
+                           44     46  J1     45 JIG
+6.18     Board1  -        134     44  F44    FLIP over
+                           45     45  45     
+                           44     46  J1     45 JIG
+6.19     Board1  -        136     46  FJ1    FLIP over, 45 JIG
+                          134     44  F44    FLIP over
+                           62     28  28     
+6.20     Board1  -        136     46  FJ1    FLIP over, 45 JIG
+                           45     45  45     
+                           44     46  J1     45 JIG
+6.21     Board1  -         93      3  F3     FLIP over
+                           62     28  28     
+                           46     44  44     
+                           44     46  J1     45 JIG
+6.22     Board1  -         57     33  33     
+                           45     45  45     
+                           45     45  45     
+6.23     Board1  -         62     28  28     
+                           62     28  28     
+                           62     28  28     
+                           62     28  28     
+                           62     28  28     
+                           57     33  33     
+                           47     43  43     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           44     46  J1     45 JIG
+6.24     Board1  -        135     45  F45    FLIP over
+                           90      0  sq     
+                           45     45  45     
+6.25     Board1  -        135     45  F45    FLIP over
+                           90      0  sq     
+                           90      0  sq     
+                           45     45  45     
+6.26     Board1  -        135     45  F45    FLIP over
+                           90      0  sq     
+                           42     48  J3     45 JIG
+6.27     Board1  -         93      3  F3     FLIP over
+                           62     28  28     
+                           45     45  45     
+6.28     Board1  -        133     43  F43    FLIP over
+                           46     44  44     
+                           45     45  45     
+6.29     Board1  -        133     43  F43    FLIP over
+                           62     28  28     
+6.30     Board1  -        135     45  F45    FLIP over
+                           62     28  28     
+                           62     28  28     
+                           56     34  34     
+                           46     44  44     
+6.31     Board1  -        135     45  F45    FLIP over
+                           56     34  34     
+6.32     Board1  -         42     48  J3     45 JIG
+6.33     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           46     44  44     
+                           45     45  45     
+                           45     45  45     
+7.1      Board1  -        135     45  F45    FLIP over
+                           67     23  23     
+7.2      Board1  -        135     45  F45    FLIP over
+                           68     22  22     
+                           45     45  45     
+7.3      Board1  -         75     15  15     
+                           68     22  22     
+                           57     33  33     
+7.4      Board1  -         84      6  6      
+                           68     22  22     
+                           60     30  30     
+                           57     33  33     
+7.5      Board1  -         84      6  6      
+                           72     18  18     
+                           70     20  20     
+7.6      Board1  -         75     15  15     
+                           75     15  15     
+                           70     20  20     
+7.7      Board1  -         75     15  15     
+                           75     15  15     
+                           72     18  18     
+7.11*    Board1  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+7.12     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           45     45  45     
+7.13     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           66     24  24     
+7.14     Board1  -        135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+7.15     Board1  -         65     25  25     
+                           45     45  45     
+                           45     45  45     
+7.16     Board1  -         66     24  24     
+                           45     45  45     
+                           45     45  45     
+7.17     Board1  -         66     24  24     
+                           66     24  24     
+                           66     24  24     
+                           62     28  28     
+                           62     28  28     
+                           47     43  43     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+7.18     Board1  -         65     25  25     
+                           62     28  28     
+                           62     28  28     
+7.19     Board1  -         65     25  25     
+                           62     28  28     
+                           62     28  28     
+7.20     Board1  -         62     28  28     
+                           62     28  28     
+                           47     43  43     
+7.21     Board1  -        135     45  F45    FLIP over
+7.22     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           69     21  21     
+                           43     47  J2     45 JIG
+7.23     Board1  -        135     45  F45    FLIP over
+                          135     45  F45    FLIP over
+                           43     47  J2     45 JIG
+7.24     Board1  -        135     45  F45    FLIP over
+                           65     25  25     
+                           45     45  45     
+                           45     45  45     
+7.25     Board1  -         66     24  24     
+                           45     45  45     
+7.26     Board1  -         68     22  22     
+                           40     50  J5     45 JIG
+8.1      Board2  -         45     45  45     
+                           44     46  J1     45 JIG
+8.2      Board2  -         90      0  sq     
+                           46     44  44     
+                           45     45  45     
+                           44     46  J1     45 JIG
+8.3      Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+8.4      Board2  yes       46     44  F44    FLIP over
+                           45     45  F45    FLIP over
+8.5      Board2  -         90      0  sq     
+                           46     44  44     
+                           45     45  45     
+8.6      Board2  -        135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+8.7      Board2  -        135     45  F45    FLIP over
+                           46     44  44     
+                           45     45  45     
+9.1      Board2  -         45     45  45     
+                           45     45  45     
+9.2      Board2  yes       46     44  F44    FLIP over
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+9.3      Board2  -         45     45  45     
+                           45     45  45     
+9.4      Board2  -         46     44  44     
+10.1     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+10.2     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+10.3     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+10.4     Board2  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+10.5     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+11.1     Board2  -         97      7  F7     FLIP over
+                           45     45  45     
+11.2     Board2  yes       97      7  7      
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+11.3     Board2  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+11.4     Board2  -         45     45  45     
+                           45     45  45     
+11.5     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+12.1     Board2  yes       53     37  F37    FLIP over
+                           45     45  F45    FLIP over
+12.2     Board2  -         84      6  6      
+                           53     37  37     
+                           45     45  45     
+12.3     Board2  -         84      6  6      
+                           45     45  45     
+                           43     47  J2     45 JIG
+12.4     Board2  -         45     45  45     
+                           43     47  J2     45 JIG
+12.5     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+13.1     Board2  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+13.2     Board2  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+13.3     Board2  yes       45     45  F45    FLIP over
+                           45     45  F45    FLIP over
+13.4     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+14.1     Board2  -         46     44  44     
+                           45     45  45     
+                           45     45  45     
+14.2     Board2  -        135     45  F45    FLIP over
+                           45     45  45     
+                           45     45  45     
+14.3     Board2  yes      135     45  45     
+                           45     45  F45    FLIP over
+14.4     Board2  yes       46     44  F44    FLIP over
+                           45     45  F45    FLIP over
+14.5     Board2  -         45     45  45     
+                           45     45  45     
+                           45     45  45     
+                           45     45  45     
+BP3      Board1  -          -      -  -      all edges square
+BP2      Board1  -          -      -  -      all edges square
+BP1      Board1  -          -      -  -      all edges square
+
+SUMMARY: 397 bevelled edges, 32 need the jig, 100 need the piece flipped.

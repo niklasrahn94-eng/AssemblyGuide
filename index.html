@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Assembly Guide — 1:200 Umgebungsgebäude</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#14161a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Assembly">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="icon" href="./icon-192.png">
+<style>
+/* ---------------------------------------------------------------- tokens */
+:root{
+  --bg:#14161a; --bg2:#1b1e24; --bg3:#232830; --line:#2f353f;
+  --fg:#e9ecf1; --fg2:#a4adba; --fg3:#6e7885;
+  --raw:#b9b1a3; --bev:#4a9eda; --glue:#4caf7d; --focus:#ff8c3a;
+  --warn:#ffb020; --bad:#ff5c5c; --jig:#c86ff0;
+  --tap:52px;                       /* min tap target - dusty hands, shop light */
+  --safeT:env(safe-area-inset-top,0px);
+  --safeB:env(safe-area-inset-bottom,0px);
+  --safeL:env(safe-area-inset-left,0px);
+  --safeR:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;overscroll-behavior:none}
+body{
+  background:var(--bg); color:var(--fg);
+  font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+[hidden]{display:none !important}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+
+/* ---------------------------------------------------------------- shell */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+.screen{flex:1;min-height:0;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;gap:8px;
+  padding:calc(var(--safeT) + 6px) calc(var(--safeR) + 8px) 6px calc(var(--safeL) + 8px);
+  background:var(--bg2);border-bottom:1px solid var(--line);flex:none;
+}
+.topbar h1{font-size:15px;font-weight:650;margin:0;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{min-width:var(--tap);height:var(--tap);display:flex;align-items:center;
+  justify-content:center;border-radius:12px;font-size:19px;color:var(--fg2)}
+.iconbtn:active{background:var(--bg3)}
+.iconbtn.wide{padding:0 12px;font-size:14px;font-weight:600}
+
+/* tab bar */
+.tabbar{
+  flex:none;display:flex;background:var(--bg2);border-top:1px solid var(--line);
+  padding-bottom:var(--safeB);
+}
+.tabbar button{
+  flex:1;height:56px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;font-size:10.5px;color:var(--fg3);letter-spacing:.02em;
+}
+.tabbar button i{font-style:normal;font-size:19px;line-height:1}
+.tabbar button[aria-current="true"]{color:var(--focus)}
+
+/* ---------------------------------------------------------------- 3d stage */
+.stage{position:relative;flex:1;min-height:0;background:#0f1114}
+#viewport{position:absolute;inset:0;overflow:hidden}
+#gl{display:block;width:100%;height:100%;touch-action:none}
+#viewhud{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px}
+#viewhud button{
+  width:42px;height:42px;border-radius:12px;background:rgba(28,32,39,.86);
+  border:1px solid var(--line);font-size:17px;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px)
+}
+#viewhud button.on{border-color:var(--focus);color:var(--focus)}
+#viewtip{
+  position:absolute;left:8px;bottom:10px;font-size:11px;color:var(--fg3);
+  background:rgba(20,22,26,.7);padding:4px 8px;border-radius:8px;pointer-events:none
+}
+
+/* building filter strip */
+.bldstrip{
+  flex:none;display:flex;gap:6px;overflow-x:auto;padding:8px;background:var(--bg2);
+  border-bottom:1px solid var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch
+}
+.bldstrip::-webkit-scrollbar{display:none}
+.bldchip{
+  flex:none;padding:7px 11px;border-radius:11px;background:var(--bg3);border:1px solid transparent;
+  font-size:13px;font-weight:600;white-space:nowrap;color:var(--fg2)
+}
+.bldchip .sub{font-weight:400;font-size:11px;color:var(--fg3);margin-left:5px}
+.bldchip[aria-pressed="true"]{background:#2b3444;border-color:var(--focus);color:var(--fg)}
+.bldchip.done .sub{color:var(--glue)}
+
+/* legend */
+.legend{position:absolute;left:8px;top:8px;z-index:5;display:flex;flex-direction:column;gap:3px;
+  background:rgba(20,22,26,.72);padding:6px 8px;border-radius:10px;font-size:11px;color:var(--fg2);
+  pointer-events:none;backdrop-filter:blur(6px)}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:3px;flex:none}
+
+/* ---------------------------------------------------------------- part card */
+.partlayout{flex:1;min-height:0;display:flex;flex-direction:column}
+#stage-part{flex:none;height:40vh;min-height:200px;border-bottom:1px solid var(--line)}
+.card{
+  flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:12px calc(var(--safeR) + 12px) calc(var(--safeB) + 32px) calc(var(--safeL) + 12px)
+}
+@media (min-width:860px){
+  .partlayout{flex-direction:row}
+  #stage-part{flex:1;height:auto;border-bottom:0;border-right:1px solid var(--line)}
+  .card{flex:none;width:min(46vw,560px)}
+}
+
+.sec{margin:0 0 16px}
+.sec > h2{
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--fg3);
+  margin:0 0 7px;font-weight:700
+}
+.panel{background:var(--bg2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.panel.pad{padding:12px}
+
+/* alerts */
+.alert{
+  display:flex;gap:9px;padding:10px 12px;border-radius:12px;margin-bottom:8px;
+  font-size:13px;line-height:1.4;border:1px solid
+}
+.alert b{display:block;margin-bottom:2px}
+.alert.bad{background:#2a1618;border-color:#5d2b2e;color:#ffd7d7}
+.alert.warn{background:#2a2415;border-color:#5d4f22;color:#ffe9bd}
+.alert.info{background:#16232c;border-color:#28485c;color:#cfe6f5}
+.alert .ico{font-size:16px;line-height:1.2;flex:none}
+
+/* state buttons */
+.states{display:flex;gap:9px}
+.statebtn{
+  flex:1;min-height:60px;border-radius:14px;border:1.5px solid var(--line);
+  background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;font-weight:700;font-size:15px
+}
+.statebtn small{font-weight:500;font-size:11px;color:var(--fg3)}
+.statebtn[aria-pressed="true"].bev{background:#123047;border-color:var(--bev);color:#bfe1ff}
+.statebtn[aria-pressed="true"].bev small{color:#8ec4ee}
+.statebtn[aria-pressed="true"].glue{background:#12331f;border-color:var(--glue);color:#c1f0d6}
+.statebtn[aria-pressed="true"].glue small{color:#84cfa4}
+.statebtn:disabled{opacity:.45}
+
+/* edge rows */
+.edgerow{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--line);
+  min-height:var(--tap)
+}
+.edgerow:last-child{border-bottom:0}
+.edgerow.sel{background:#232c37}
+.edgerow.done .meta{opacity:.5}
+.tick{
+  width:34px;height:34px;flex:none;border-radius:9px;border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:17px;color:transparent;background:var(--bg3)
+}
+.tick[aria-pressed="true"]{background:var(--bev);border-color:var(--bev);color:#07131c}
+.chip{
+  flex:none;min-width:54px;padding:6px 8px;border-radius:9px;text-align:center;
+  font-weight:800;font-size:17px;letter-spacing:.01em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  background:var(--bg3);color:var(--fg)
+}
+.chip.k-plain{background:#17384f;color:#8fd0ff;border:1px solid #2b6288}
+.chip.k-flip {background:#3d2f10;color:#ffd07a;border:1px solid #7a5c1c}
+.chip.k-jig  {background:#33194a;color:#dfaaff;border:1px solid #6a3794}
+.chip.k-both {background:#43162a;color:#ffa9cb;border:1px solid #8c3059}
+.chip.k-sq   {background:var(--bg3);color:var(--fg3);border:1px solid var(--line);font-weight:600;font-size:14px}
+.edgerow .meta{flex:1;min-width:0;font-size:12.5px;color:var(--fg2);line-height:1.35}
+.edgerow .meta b{color:var(--fg);font-weight:650;font-size:13.5px;display:block}
+.edgerow .meta .sub{color:var(--fg3);font-size:11.5px}
+.badge{display:inline-block;padding:1px 6px;border-radius:6px;font-size:10.5px;font-weight:700;
+  background:var(--bg3);color:var(--fg2);margin-left:5px;vertical-align:1px}
+.badge.bad{background:#4a1e21;color:#ffb4b4}
+.badge.warn{background:#4a3c17;color:#ffd98a}
+
+/* drawings */
+.draw{background:#101318;border-radius:12px;padding:6px;overflow:hidden}
+.draw svg{display:block;width:100%;height:auto;max-height:56vh}
+.drawnote{font-size:11.5px;color:var(--fg3);padding:6px 4px 0;line-height:1.4}
+
+/* generic list rows */
+.row{
+  display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);
+  min-height:var(--tap);width:100%;text-align:left
+}
+.row:last-child{border-bottom:0}
+.row .grow{flex:1;min-width:0}
+.row .id{font-weight:700;font-variant-numeric:tabular-nums}
+.row .sub{font-size:11.5px;color:var(--fg3)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:12px calc(var(--safeR) + 12px) calc(var(--safeB) + 24px) calc(var(--safeL) + 12px)}
+
+/* progress bars */
+.bar{height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;flex:none}
+.bar > i{display:block;height:100%;background:var(--glue);border-radius:3px}
+.bar.bev > i{background:var(--bev)}
+
+.searchwrap{padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--line);flex:none;
+  display:flex;gap:8px}
+.searchwrap input{flex:1;height:44px;border-radius:11px;border:1px solid var(--line);
+  background:var(--bg3);padding:0 12px;outline:none}
+.searchwrap input:focus{border-color:var(--focus)}
+
+textarea.note{
+  width:100%;min-height:76px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg2);padding:10px;outline:none;resize:vertical
+}
+textarea.note:focus{border-color:var(--focus)}
+
+.btn{
+  min-height:var(--tap);padding:0 16px;border-radius:12px;background:var(--bg3);
+  border:1px solid var(--line);font-weight:600;display:inline-flex;align-items:center;
+  justify-content:center;gap:8px
+}
+.btn:active{background:#2c333d}
+.btn.primary{background:#2a3a4d;border-color:#3c5a78}
+.btn.danger{color:#ffb4b4;border-color:#5d2b2e}
+.btnrow{display:flex;gap:9px;flex-wrap:wrap}
+
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv span:last-child{color:var(--fg2);text-align:right;font-variant-numeric:tabular-nums}
+
+details.acc > summary{
+  padding:12px;cursor:pointer;font-weight:650;font-size:13px;list-style:none;
+  display:flex;align-items:center;gap:8px;min-height:var(--tap)
+}
+details.acc > summary::-webkit-details-marker{display:none}
+details.acc > summary::after{content:"▾";margin-left:auto;color:var(--fg3)}
+details.acc[open] > summary::after{content:"▴"}
+details.acc > .body{padding:0 12px 12px}
+
+#toast{
+  position:fixed;left:50%;bottom:calc(var(--safeB) + 76px);transform:translateX(-50%);
+  background:#2b323d;border:1px solid var(--line);color:var(--fg);padding:10px 16px;
+  border-radius:12px;font-size:13px;z-index:60;pointer-events:none;opacity:0;
+  transition:opacity .2s;max-width:88vw;text-align:center
+}
+#toast.show{opacity:1}
+
+#boot{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;z-index:100;color:var(--fg2);font-size:13px}
+#boot .sp{width:26px;height:26px;border:3px solid var(--bg3);border-top-color:var(--focus);
+  border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="boot"><div class="sp"></div><div id="bootmsg">loading the model…</div></div>
+
+<div id="app" hidden>
+
+  <!-- ============================================================ SCREEN A -->
+  <section id="screen-model" class="screen">
+    <header class="topbar">
+      <h1 id="modelTitle">Assembly Guide</h1>
+      <button class="iconbtn wide" id="btnFitAll" title="Fit whole model">fit</button>
+    </header>
+    <div class="bldstrip" id="bldStrip"></div>
+    <div class="stage" id="stage-model">
+      <div class="legend">
+        <span><i class="sw" style="background:var(--raw)"></i>raw</span>
+        <span><i class="sw" style="background:var(--bev)"></i>bevelled</span>
+        <span><i class="sw" style="background:var(--glue)"></i>glued</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SCREEN B -->
+  <section id="screen-part" class="screen" hidden>
+    <header class="topbar">
+      <button class="iconbtn" id="btnBack" aria-label="Back">‹</button>
+      <h1 id="partTitle">—</h1>
+      <button class="iconbtn" id="btnPrev" aria-label="Previous part">↑</button>
+      <button class="iconbtn" id="btnNext" aria-label="Next part">↓</button>
+    </header>
+    <div class="partlayout">
+      <div class="stage" id="stage-part"></div>
+      <div class="card" id="cardBody"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ SCREEN L -->
+  <section id="screen-list" class="screen" hidden>
+    <header class="topbar"><h1>Parts</h1>
+      <button class="iconbtn wide" id="btnOrderMode">assembly order</button>
+    </header>
+    <div class="searchwrap">
+      <input id="search" type="search" placeholder="part id, e.g. 7.17" autocomplete="off"
+             autocorrect="off" spellcheck="false">
+    </div>
+    <div class="scroll" id="listBody"></div>
+  </section>
+
+  <!-- ============================================================ SCREEN C -->
+  <section id="screen-setups" class="screen" hidden>
+    <header class="topbar"><h1>Sander setups</h1>
+      <button class="iconbtn wide" id="btnHideDoneSetups">hide done</button>
+    </header>
+    <div class="scroll" id="setupsBody"></div>
+  </section>
+
+  <!-- ============================================================ SCREEN P -->
+  <section id="screen-progress" class="screen" hidden>
+    <header class="topbar"><h1>Progress &amp; notes</h1></header>
+    <div class="scroll" id="progressBody"></div>
+  </section>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-route="model"   aria-current="true"><i>◲</i>3D model</button>
+    <button data-route="list"><i>≡</i>Parts</button>
+    <button data-route="setups"><i>∠</i>Setups</button>
+    <button data-route="progress"><i>◔</i>Progress</button>
+  </nav>
+</div>
+
+<!-- the single WebGL viewport; moved between stages so iOS only ever has one context -->
+<div id="viewport">
+  <canvas id="gl"></canvas>
+  <div id="viewhud">
+    <button id="hudFit" title="Frame">⤢</button>
+    <button id="hudCtx" title="Show the rest of the model">◐</button>
+  </div>
+  <div id="viewtip">drag to orbit · pinch to zoom · tap a part</div>
+</div>
+
+<div id="toast"></div>
+<input id="importFile" type="file" accept="application/json,.json" hidden>
+
+<script src="./three.min.js"></script>
+<script src="./OrbitControls.js"></script>
+<script src="./assembly_data.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* =====================================================================
+   0.  data index
+   ===================================================================== */
+var D = window.ASSEMBLY;
+if(!D){ document.getElementById('bootmsg').textContent = 'assembly_data.js failed to load.'; return; }
+
+var PARTS  = D.parts;
+var PLATES = D.plates;
+var ALL    = PARTS.concat(PLATES);
+var BYID   = {};  ALL.forEach(function(p){ BYID[p.id] = p; });
+var BLD    = {};  D.buildings.forEach(function(b){ BLD[b.id] = b; });
+var ORDER  = D.order;
+var ORDIX  = {};  ORDER.forEach(function(id,i){ ORDIX[id] = i; });
+
+function isPlate(p){ return !p.edges; }
+function workEdges(p){
+  if(isPlate(p)) return [];
+  return p.edges.filter(function(e){ return e.needsWork; });
+}
+var ALL_WORK = 0;
+PARTS.forEach(function(p){ ALL_WORK += workEdges(p).length; });
+
+/* Sanding a 0.16 mm edge is not a real operation - call it out rather than
+   let it look like a missed job forever. */
+var SLIVER = 1.0;
+
+/* The angle callouts milled into the boards came from a stale dot set, so these
+   12 parts carry fewer numbers on the board than they need. See the warning in
+   D.warnings and docs/Phase1_ExportReport.txt. */
+var STALE_BOARD = ['2.1','2.3','2.4','2.7','5.5','5.8','5.11','6.6','6.32','7.25','9.3','9.4'];
+var STALE_NONE  = ['2.1','2.4'];   // these two show no callout at all and need six
+
+/* clash warnings, indexed by part, for the glue-up note */
+var CLASH = {};
+D.warnings.forEach(function(w){
+  var m = /^Clash:\s+(\S+)\s+x\s+(\S+)\s+([\d.]+)/.exec(w);
+  if(!m) return;
+  [[m[1],m[2]],[m[2],m[1]]].forEach(function(pair){
+    (CLASH[pair[0]] = CLASH[pair[0]] || []).push({ other: pair[1], vol: parseFloat(m[3]) });
+  });
+});
+
+/* =====================================================================
+   1.  progress store
+   ===================================================================== */
+function djb2(s){ var h = 5381; for(var i=0;i<s.length;i++) h = ((h<<5) + h + s.charCodeAt(i)) | 0; return (h>>>0).toString(36); }
+var DATA_HASH = djb2([D.meta.model, D.meta.generated, PARTS.length, PLATES.length, ALL_WORK].join('|'));
+var STORE_KEY = 'assemblyGuide.v1.' + DATA_HASH;
+
+var PROG = {}, storageOK = true, lastSaved = null;
+try{
+  var raw = localStorage.getItem(STORE_KEY);
+  if(raw){ var o = JSON.parse(raw); PROG = o.parts || {}; lastSaved = o.savedAt || null; }
+  localStorage.setItem(STORE_KEY + '.probe','1'); localStorage.removeItem(STORE_KEY + '.probe');
+}catch(err){ storageOK = false; }
+
+var saveTimer = null;
+function writeStore(){
+  if(saveTimer){ clearTimeout(saveTimer); saveTimer = null; }
+  lastSaved = new Date().toISOString();
+  if(!storageOK) return;
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      v:1, model:D.meta.model, generated:D.meta.generated, dataHash:DATA_HASH,
+      savedAt:lastSaved, parts:PROG
+    }));
+  }catch(err){ storageOK = false; toast('Storage is full or blocked — export your progress.'); }
+}
+function save(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeStore, 250);
+}
+/* iOS kills backgrounded tabs without warning. Anything still sitting in the
+   debounce would be lost, so flush the moment the page goes away. */
+window.addEventListener('pagehide', function(){ if(saveTimer) writeStore(); });
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'hidden' && saveTimer) writeStore();
+});
+function rec(id){
+  var r = PROG[id];
+  if(!r){ r = PROG[id] = { b:false, g:false, n:'', e:{} }; }
+  if(!r.e) r.e = {};
+  return r;
+}
+function edgeDone(p,n){ var r = PROG[p.id]; return !!(r && (r.b || (r.e && r.e[n]))); }
+function isBevelled(p){
+  var w = workEdges(p);
+  if(!w.length) return true;                  // nothing to sand: already correct as milled
+  var r = PROG[p.id];
+  return !!(r && r.b);
+}
+function isGlued(p){ var r = PROG[p.id]; return !!(r && r.g); }
+function edgesDone(p){
+  var r = PROG[p.id]; if(!r) return 0;
+  if(r.b) return workEdges(p).length;
+  var n = 0; workEdges(p).forEach(function(e){ if(r.e && r.e[e.n]) n++; });
+  return n;
+}
+function setEdge(p,n,val){
+  var r = rec(p.id);
+  if(r.b && !val){ // un-ticking one edge of a fully-done part: expand to explicit ticks first
+    r.b = false; workEdges(p).forEach(function(e){ r.e[e.n] = 1; });
+  }
+  if(val) r.e[n] = 1; else delete r.e[n];
+  r.b = workEdges(p).every(function(e){ return !!r.e[e.n]; });
+  save(); afterStateChange(p);
+}
+function setBevelled(p,val){
+  var r = rec(p.id);
+  r.b = !!val; r.e = {};
+  if(val) workEdges(p).forEach(function(e){ r.e[e.n] = 1; });
+  save(); afterStateChange(p);
+}
+function setGlued(p,val){ rec(p.id).g = !!val; save(); afterStateChange(p); }
+
+function afterStateChange(p){
+  applyStyles();
+  if(route.name === 'part' && route.id === p.id) renderCard();
+  renderBldStrip();
+  if(route.name === 'list')     renderList();
+  if(route.name === 'setups')   renderSetups();
+  if(route.name === 'progress') renderProgress();
+}
+
+/* =====================================================================
+   2.  small helpers
+   ===================================================================== */
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){
+  return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function fmt(n,d){ return Number(n).toFixed(d === undefined ? 1 : d); }
+var toastTimer = null;
+function toast(msg){
+  var t = el('toast'); t.textContent = msg; t.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+function edgeKind(e){
+  if(!e.needsWork) return 'sq';
+  if(e.flip && e.jig) return 'both';
+  if(e.flip) return 'flip';
+  if(e.jig)  return 'jig';
+  return 'plain';
+}
+/* Plain-language instruction for one bevel, straight from the settled convention:
+   table = 90 - shown, flip if that goes negative, 45 jig above 45. */
+function edgeHow(e){
+  if(!e.needsWork){
+    return e.type === 'flat'
+      ? 'Already correct — this face folds out almost flat, the milled square edge is right.'
+      : 'Already correct as milled — leave it square.';
+  }
+  var s = 'Tilt the table to ' + fmt(e.set,0) + '°';
+  if(e.jig)  s += ', on the 45° jig';
+  s += '. ';
+  s += e.flip ? 'Flip the piece over first — the other face goes down on the table.'
+              : 'Piece the natural way up, outer face up.';
+  return s;
+}
+
+/* =====================================================================
+   3.  three.js scene
+   ===================================================================== */
+var renderer, scene, camera, controls, raycaster, MESH = {}, CX, CY, CZ, MODEL_R = 100;
+var hiTube = null, dirty = true, camAnim = null;
+var showContext = true;              // on the part card: draw the rest of the building
+var bldFilter = null;                // screen A: only this building solid
+
+var COL = {
+  raw:0xb9b1a3, bev:0x4a9eda, glue:0x4caf7d, plate:0x77808d,
+  focus:0xff8c3a, ghost:0x8a94a3
+};
+
+function W(p){ return new THREE.Vector3(p[0]-CX, p[2]-CZ, -(p[1]-CY)); }
+
+function buildScene(){
+  /* world bbox over every mesh - Rhino is Z-up, three is Y-up */
+  var mn = [1e30,1e30,1e30], mx = [-1e30,-1e30,-1e30], i, k, v;
+  ALL.forEach(function(p){
+    v = p.mesh.v;
+    for(i=0;i<v.length;i+=3) for(k=0;k<3;k++){
+      if(v[i+k] < mn[k]) mn[k] = v[i+k];
+      if(v[i+k] > mx[k]) mx[k] = v[i+k];
+    }
+  });
+  CX = (mn[0]+mx[0])/2; CY = (mn[1]+mx[1])/2; CZ = mn[2];
+  MODEL_R = 0.5 * Math.sqrt(Math.pow(mx[0]-mn[0],2) + Math.pow(mx[1]-mn[1],2) + Math.pow(mx[2]-mn[2],2));
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f1114);
+
+  /* three lights, not one: a 4 mm bevel is invisible under a single lamp */
+  scene.add(new THREE.HemisphereLight(0xdfe8f5, 0x3a3f48, 0.55));
+  var key = new THREE.DirectionalLight(0xffffff, 0.72); key.position.set(0.55,1,0.7); scene.add(key);
+  var fill= new THREE.DirectionalLight(0xbcd2ea, 0.26); fill.position.set(-0.8,0.35,-0.6); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xffd9b0, 0.18); rim.position.set(0.2,-0.5,-1); scene.add(rim);
+
+  ALL.forEach(function(p){
+    var m = p.mesh, n = m.v.length/3, pos = new Float32Array(m.v.length);
+    for(i=0;i<n;i++){
+      pos[i*3  ] =   m.v[i*3  ] - CX;
+      pos[i*3+1] =   m.v[i*3+2] - CZ;
+      pos[i*3+2] = -(m.v[i*3+1] - CY);
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    g.setIndex(m.t);
+    g.computeVertexNormals();
+    g.computeBoundingBox(); g.computeBoundingSphere();
+
+    var mat = new THREE.MeshPhongMaterial({ color:COL.raw, shininess:6, flatShading:true,
+                                            side:THREE.DoubleSide });
+    var mesh = new THREE.Mesh(g, mat);
+    mesh.userData.id = p.id;
+    scene.add(mesh);
+
+    /* crease lines - what actually makes the miters legible */
+    var lg  = new THREE.EdgesGeometry(g, 22);
+    var lm  = new THREE.LineBasicMaterial({ color:0x0a0c0f, transparent:true, opacity:0.55 });
+    var lines = new THREE.LineSegments(lg, lm);
+    scene.add(lines);
+
+    MESH[p.id] = { part:p, mesh:mesh, mat:mat, lines:lines, lmat:lm };
+  });
+
+  var cv = el('gl');
+  renderer = new THREE.WebGLRenderer({ canvas:cv, antialias:true, powerPreference:'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+  camera = new THREE.PerspectiveCamera(45, 1, MODEL_R/200, MODEL_R*40);
+  camera.position.set(MODEL_R*1.1, MODEL_R*0.95, MODEL_R*1.5);
+
+  controls = new THREE.OrbitControls(camera, cv);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.09;
+  controls.rotateSpeed = 0.85;
+  controls.zoomSpeed = 0.9;
+  controls.panSpeed = 0.8;
+  controls.screenSpacePanning = true;
+  controls.minDistance = MODEL_R/40;
+  controls.maxDistance = MODEL_R*14;
+  controls.maxPolarAngle = Math.PI*0.495;   // never go under the ground plane
+
+  raycaster = new THREE.Raycaster();
+  resize();
+  frameAll(true);
+  tick();
+}
+
+/* -------------------------------------------------- appearance by state */
+function stateColour(p){
+  if(isPlate(p)) return isGlued(p) ? COL.glue : COL.plate;
+  if(isGlued(p))    return COL.glue;
+  if(isBevelled(p)) return COL.bev;
+  return COL.raw;
+}
+function applyStyles(){
+  var focusId = (route.name === 'part') ? route.id : null;
+  var focusPart = focusId ? BYID[focusId] : null;
+  var focusBld  = focusPart && !isPlate(focusPart) ? focusPart.building : null;
+
+  ALL.forEach(function(p){
+    var r = MESH[p.id], role;
+    if(focusId){
+      if(p.id === focusId)                          role = 'focus';
+      else if(isGlued(p))                           role = 'solid';
+      else if(!isPlate(p) && p.building === focusBld) role = 'ghost';
+      else                                          role = showContext ? 'ghost' : 'hidden';
+      if(isPlate(p) && !showContext && !isGlued(p)) role = 'ghost';
+    }else{
+      if(bldFilter && !(isPlate(p) ? false : p.building === bldFilter)) role = 'ghost';
+      else role = 'solid';
+    }
+
+    var m = r.mat;
+    if(role === 'hidden'){ r.mesh.visible = false; r.lines.visible = false; return; }
+    r.mesh.visible = true;
+
+    if(role === 'ghost'){
+      m.color.setHex(COL.ghost); m.emissive.setHex(0x000000);
+      m.transparent = true; m.opacity = 0.085; m.depthWrite = false;
+      r.lines.visible = false;
+    }else{
+      m.transparent = false; m.opacity = 1; m.depthWrite = true;
+      if(role === 'focus'){
+        m.color.setHex(COL.focus); m.emissive.setHex(0x351400);
+        r.lmat.color.setHex(0x140800); r.lmat.opacity = 0.75;
+      }else{
+        m.color.setHex(stateColour(p)); m.emissive.setHex(0x000000);
+        r.lmat.color.setHex(0x0a0c0f); r.lmat.opacity = 0.55;
+      }
+      r.lines.visible = true;
+    }
+    m.needsUpdate = true;
+  });
+  invalidate();
+}
+
+/* -------------------------------------------------- edge highlight tube */
+function highlightEdge(seg3d){
+  if(hiTube){ scene.remove(hiTube); hiTube.geometry.dispose(); hiTube = null; }
+  if(!seg3d) { invalidate(); return; }
+  var a = W(seg3d[0]), b = W(seg3d[1]);
+  var len = a.distanceTo(b);
+  if(len < 1e-6){ invalidate(); return; }
+  var g = new THREE.CylinderGeometry(Math.max(MODEL_R*0.0035, 0.5), Math.max(MODEL_R*0.0035, 0.5), len, 8, 1);
+  var m = new THREE.MeshBasicMaterial({ color:0xffffff, depthTest:false, transparent:true, opacity:0.95 });
+  hiTube = new THREE.Mesh(g,m);
+  hiTube.renderOrder = 999;
+  hiTube.position.copy(a).add(b).multiplyScalar(0.5);
+  hiTube.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), b.clone().sub(a).normalize());
+  scene.add(hiTube);
+  invalidate();
+}
+
+/* -------------------------------------------------- framing + render loop */
+function boxOf(ids){
+  var box = new THREE.Box3(), got = false;
+  ids.forEach(function(id){
+    var r = MESH[id]; if(!r) return;
+    var b = r.mesh.geometry.boundingBox.clone();
+    if(!got){ box.copy(b); got = true; } else box.union(b);
+  });
+  return got ? box : null;
+}
+function frameBox(box, pad, instant){
+  if(!box) return;
+  var c = box.getCenter(new THREE.Vector3());
+  var dir = camera.position.clone().sub(controls.target);
+  if(dir.lengthSq() < 1e-9) dir.set(1,0.9,1.3);
+  dir.normalize();
+
+  /* Fit the box exactly, corner by corner, rather than its bounding sphere.
+     The widest corner and the nearest corner are different corners, so the usual
+     "half-width / tan + half-depth" shortcut overshoots badly on a wide site model
+     in a tall phone viewport - it leaves the whole thing floating in empty screen. */
+  var up = Math.abs(dir.y) > 0.98 ? new THREE.Vector3(0,0,-1) : new THREE.Vector3(0,1,0);
+  var right = new THREE.Vector3().crossVectors(up, dir).normalize();
+  var camUp = new THREE.Vector3().crossVectors(dir, right).normalize();
+  var tv = Math.tan(camera.fov * Math.PI/360) / (pad || 1.25);
+  var th = tv * camera.aspect;
+
+  var mn = box.min, mx = box.max, dist = MODEL_R*0.02, v = new THREE.Vector3();
+  for(var bx=0; bx<8; bx++){
+    v.set(bx & 1 ? mx.x : mn.x, bx & 2 ? mx.y : mn.y, bx & 4 ? mx.z : mn.z).sub(c);
+    /* a corner at depth (dist - v·dir) fits when its lateral offset is inside the
+       frustum there, so each corner sets its own minimum distance */
+    var along = v.dot(dir);
+    dist = Math.max(dist,
+                    along + Math.abs(v.dot(right))/th,
+                    along + Math.abs(v.dot(camUp))/tv);
+  }
+  var to = c.clone().add(dir.multiplyScalar(dist));
+  if(instant){
+    camera.position.copy(to); controls.target.copy(c); controls.update(); invalidate();
+  }else{
+    camAnim = { p0:camera.position.clone(), p1:to,
+                t0:controls.target.clone(), t1:c, s:performance.now(), d:420 };
+  }
+}
+function frameAll(instant){
+  bldFilter = null;
+  frameBox(boxOf(ALL.map(function(p){ return p.id; })), 1.12, instant);
+  renderBldStrip();
+}
+function invalidate(){ dirty = true; }
+function tick(){
+  requestAnimationFrame(tick);
+  if(camAnim){
+    var k = Math.min(1,(performance.now()-camAnim.s)/camAnim.d);
+    var e = k<0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+    camera.position.lerpVectors(camAnim.p0, camAnim.p1, e);
+    controls.target.lerpVectors(camAnim.t0, camAnim.t1, e);
+    if(k >= 1) camAnim = null;
+    dirty = true;
+  }
+  var moved = controls.update();
+  if(moved || dirty){ renderer.render(scene, camera); dirty = false; }
+}
+function resize(){
+  var vp = el('viewport'), w = vp.clientWidth, h = vp.clientHeight;
+  if(!w || !h || !renderer) return;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  invalidate();
+}
+
+/* -------------------------------------------------- tap to select */
+(function(){
+  var cv = el('gl'), sx = 0, sy = 0, st = 0, moved = false;
+  cv.addEventListener('pointerdown', function(ev){
+    sx = ev.clientX; sy = ev.clientY; st = performance.now(); moved = false;
+  });
+  cv.addEventListener('pointermove', function(ev){
+    if(Math.abs(ev.clientX-sx) > 9 || Math.abs(ev.clientY-sy) > 9) moved = true;
+  });
+  cv.addEventListener('pointerup', function(ev){
+    if(moved || performance.now()-st > 600) return;
+    var rct = cv.getBoundingClientRect();
+    var pt = new THREE.Vector2(
+      ((ev.clientX-rct.left)/rct.width)*2 - 1,
+      -((ev.clientY-rct.top)/rct.height)*2 + 1);
+    raycaster.setFromCamera(pt, camera);
+    var targets = [];
+    ALL.forEach(function(p){
+      var r = MESH[p.id];
+      if(!r.mesh.visible) return;
+      if(r.mat.transparent && r.mat.opacity < 0.2) return;   // don't pick ghosts
+      targets.push(r.mesh);
+    });
+    var hit = raycaster.intersectObjects(targets, false);
+    if(hit.length) go('part', hit[0].object.userData.id);
+  });
+})();
+
+/* =====================================================================
+   4.  SVG drawings
+   ===================================================================== */
+function svgOpen(x0,y0,w,h){
+  return '<svg viewBox="' + fmt(x0,2) + ' ' + fmt(y0,2) + ' ' + fmt(w,2) + ' ' + fmt(h,2) +
+         '" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">';
+}
+var KINDCOL = { plain:'#5cb3ef', flip:'#ffc75a', jig:'#d9a2ff', both:'#ff9ac4', sq:'#4d545e' };
+
+/* ---- the flat true shape, every edge annotated ---- */
+function flatSVG(part, selEdge){
+  var o = part.flat.outline, i;
+  var xs = o.map(function(p){ return p[0]; }), ys = o.map(function(p){ return p[1]; });
+  var x0 = Math.min.apply(null,xs), x1 = Math.max.apply(null,xs);
+  var y0 = Math.min.apply(null,ys), y1 = Math.max.apply(null,ys);
+  var w = Math.max(x1-x0, 1e-3), h = Math.max(y1-y0, 1e-3);
+  var big = Math.max(w,h), small = Math.min(w,h);
+  /* long thin panels would otherwise get labels taller than the piece is wide */
+  var fs  = Math.max(Math.min(big*0.055, small*0.20), big*0.026);
+  var off = fs*1.15;
+  var m   = off + fs*1.9;
+
+  /* SVG y grows downward; flip inside the bbox so the drawing reads like the layout */
+  function X(p){ return p[0]; }
+  function Y(p){ return (y0+y1) - p[1]; }
+
+  var cx = 0, cy = 0, n = o.length-1;
+  for(i=0;i<n;i++){ cx += o[i][0]; cy += o[i][1]; }
+  cx /= n; cy /= n;
+
+  /* Outward normals from the winding, not from the centroid: building 7 is full of
+     L-shaped panels, and on a concave corner "away from the centroid" points inwards. */
+  var area2 = 0;
+  for(i=0;i<n;i++){
+    var q = o[i], r2 = o[(i+1)%n];
+    area2 += q[0]*r2[1] - r2[0]*q[1];
+  }
+  var ccw = area2 > 0;
+
+  var s = svgOpen(x0-m, y0-m, w+2*m, h+2*m);
+  var d = o.map(function(p,ix){ return (ix?'L':'M') + fmt(X(p),2) + ' ' + fmt(Y(p),2); }).join(' ') + ' Z';
+  s += '<path d="' + d + '" fill="#1c2028" stroke="none"/>';
+
+  var edges = isPlate(part) ? [] : part.edges;
+  edges.forEach(function(e){
+    var a = e.flatSeg[0], b = e.flatSeg[1];
+    var k = edgeKind(e), col = KINDCOL[k];
+    var done = e.needsWork && edgeDone(part, e.n);
+    var sel  = (selEdge === e.n);
+    var sw   = sel ? big*0.016 : (e.needsWork ? big*0.010 : big*0.006);
+    s += '<line x1="'+fmt(X(a),2)+'" y1="'+fmt(Y(a),2)+'" x2="'+fmt(X(b),2)+'" y2="'+fmt(Y(b),2)+
+         '" stroke="'+(sel?'#ffffff':col)+'" stroke-width="'+fmt(sw,3)+'" stroke-linecap="round"'+
+         (done?' stroke-dasharray="'+fmt(big*0.02,3)+' '+fmt(big*0.014,3)+'"':'')+'/>';
+
+    /* label just outside the edge, pushed away from the centroid */
+    var mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+    var dx = b[0]-a[0], dy = b[1]-a[1], L = Math.hypot(dx,dy) || 1;
+    var nx = ccw ? dy/L : -dy/L, ny = ccw ? -dx/L : dx/L;
+    var lx = mx + nx*off, ly = my + ny*off;
+
+    var txt = e.needsWork ? e.label : 'sq';
+    var fill = e.needsWork ? col : '#5b636e';
+    s += '<text x="'+fmt(X([lx,ly]),2)+'" y="'+fmt(Y([lx,ly]),2)+'" fill="'+fill+
+         '" font-size="'+fmt(fs,2)+'" font-weight="'+(e.needsWork?'800':'600')+
+         '" text-anchor="middle" dominant-baseline="central"'+
+         ' font-family="ui-monospace,SFMono-Regular,Menlo,monospace">'+esc(txt)+'</text>';
+    s += '<text x="'+fmt(X([lx,ly]),2)+'" y="'+fmt(Y([lx,ly])+fs*0.92,2)+'" fill="#7c8693" font-size="'+
+         fmt(fs*0.62,2)+'" text-anchor="middle" dominant-baseline="central">'+fmt(e.len,1)+'</text>';
+  });
+
+  /* which face am I looking at */
+  s += '<text x="'+fmt(cx,2)+'" y="'+fmt((y0+y1)-cy,2)+'" fill="#3d444e" font-size="'+fmt(fs*1.25,2)+
+       '" font-weight="800" text-anchor="middle" dominant-baseline="central">'+esc(part.id)+'</text>';
+  s += '</svg>';
+  return s;
+}
+
+/* ---- where the piece is on the CNC board ---- */
+function boardSVG(part){
+  if(!part.board || !part.board.sheet) return null;
+  var bm = D.boardMaps[part.board.sheet];
+  if(!bm) return null;
+  var b = bm.bbox, w = b[2]-b[0], h = b[3]-b[1], m = Math.max(w,h)*0.03;
+  function X(p){ return p[0]; }
+  function Y(p){ return (b[1]+b[3]) - p[1]; }   // flip inside the sheet: SVG y grows down
+  function poly(pts){ return pts.map(function(p,i){
+      return (i?'L':'M') + fmt(X(p),1) + ' ' + fmt(Y(p),1); }).join(' ') + ' Z'; }
+
+  var s = svgOpen(b[0]-m, b[1]-m, w+2*m, h+2*m);
+  s += '<rect x="'+fmt(b[0],1)+'" y="'+fmt(b[1],1)+'" width="'+fmt(w,1)+'" height="'+fmt(h,1)+
+       '" fill="#171a1f" stroke="#333a44" stroke-width="'+fmt(Math.max(w,h)*0.004,2)+'"/>';
+
+  (bm.marks||[]).forEach(function(c){
+    s += '<path d="'+poly(c.pts)+'" fill="none" stroke="#2b313a" stroke-width="'+
+         fmt(Math.max(w,h)*0.002,2)+'"/>';
+  });
+  (bm.leftovers||[]).forEach(function(c){
+    s += '<path d="'+poly(c.pts)+'" fill="#22181a" stroke="#5c3a3d" stroke-width="'+
+         fmt(Math.max(w,h)*0.003,2)+'" stroke-dasharray="'+fmt(Math.max(w,h)*0.008,2)+' '+
+         fmt(Math.max(w,h)*0.006,2)+'"/>';
+  });
+  var mine = null;
+  bm.outlines.forEach(function(c){
+    if(c.partId === part.id){ mine = c; return; }
+    var other = BYID[c.partId];
+    var st = !other ? '#343b45'
+           : isGlued(other) ? '#2c4437'
+           : isBevelled(other) ? '#2b3d4d' : '#343b45';
+    s += '<path d="'+poly(c.pts)+'" fill="#1d2128" stroke="'+st+'" stroke-width="'+
+         fmt(Math.max(w,h)*0.0022,2)+'"/>';
+  });
+  if(mine){
+    s += '<path d="'+poly(mine.pts)+'" fill="#ff8c3a" fill-opacity="0.9" stroke="#ffd7b0" stroke-width="'+
+         fmt(Math.max(w,h)*0.005,2)+'"/>';
+    var mx = 0, my = 0;
+    mine.pts.forEach(function(p){ mx += p[0]; my += p[1]; });
+    mx /= mine.pts.length; my /= mine.pts.length;
+    /* a leader ring so it is findable at a glance on an 850 mm sheet */
+    s += '<circle cx="'+fmt(X([mx,my]),1)+'" cy="'+fmt(Y([mx,my]),1)+'" r="'+fmt(Math.max(w,h)*0.075,1)+
+         '" fill="none" stroke="#ff8c3a" stroke-width="'+fmt(Math.max(w,h)*0.0035,2)+
+         '" stroke-opacity="0.55"/>';
+  }
+  s += '</svg>';
+  return s;
+}
+
+/* =====================================================================
+   5.  routing
+   ===================================================================== */
+var route = { name:'model', id:null };
+var SCREENS = { model:'screen-model', part:'screen-part', list:'screen-list',
+                setups:'screen-setups', progress:'screen-progress' };
+
+function go(name, id){
+  location.hash = '#/' + name + (id ? '/' + encodeURIComponent(id) : '');
+}
+function readHash(){
+  var h = (location.hash || '').replace(/^#\/?/, '');
+  var bits = h.split('/');
+  var name = bits[0] || 'model';
+  if(!SCREENS[name]) name = 'model';
+  var id = bits[1] ? decodeURIComponent(bits[1]) : null;
+  if(name === 'part' && !BYID[id]){ name = 'model'; id = null; }
+  return { name:name, id:id };
+}
+var selEdge = null;
+function applyRoute(){
+  var prev = route;
+  route = readHash();
+  if(route.name !== 'part' || route.id !== prev.id) selEdge = null;
+
+  Object.keys(SCREENS).forEach(function(k){
+    el(SCREENS[k]).hidden = (k !== route.name);
+  });
+  el('tabbar').hidden = (route.name === 'part');
+  Array.prototype.forEach.call(el('tabbar').children, function(b){
+    b.setAttribute('aria-current', String(b.dataset.route === route.name));
+  });
+
+  /* move the single WebGL viewport to whichever stage needs it */
+  var stage = route.name === 'model' ? el('stage-model')
+            : route.name === 'part'  ? el('stage-part') : null;
+  var vp = el('viewport');
+  if(stage){ vp.hidden = false; if(vp.parentNode !== stage) stage.appendChild(vp); }
+  else { vp.hidden = true; if(vp.parentNode !== document.body) document.body.appendChild(vp); }
+  el('viewtip').hidden = (route.name !== 'model');
+  el('hudCtx').hidden  = (route.name !== 'part');
+
+  if(route.name === 'model')    renderBldStrip();
+  if(route.name === 'part')     { renderCard(); highlightEdge(null); }
+  if(route.name === 'list')     renderList();
+  if(route.name === 'setups')   renderSetups();
+  if(route.name === 'progress') renderProgress();
+
+  applyStyles();
+  requestAnimationFrame(function(){
+    resize();
+    if(route.name === 'part' && route.id !== prev.id){
+      var p = BYID[route.id];
+      /* animated even coming from the model view - watching the camera travel to the
+         piece is half of "where does this go" */
+      frameBox(boxOf([p.id]), isPlate(p) ? 1.4 : 2.4, false);
+    }
+  });
+}
+window.addEventListener('hashchange', applyRoute);
+
+/* =====================================================================
+   6.  screen A - building strip
+   ===================================================================== */
+function bldStats(b){
+  var g = 0, bv = 0;
+  b.partIds.forEach(function(id){
+    var p = BYID[id]; if(!p) return;
+    if(isGlued(p)) g++;
+    if(isBevelled(p)) bv++;
+  });
+  return { glued:g, bevelled:bv, total:b.partIds.length };
+}
+function renderBldStrip(){
+  var s = '<button class="bldchip" data-b="" aria-pressed="' + String(!bldFilter) + '">All' +
+          '<span class="sub">' + ALL.filter(isGlued).length + '/' + ALL.length + '</span></button>';
+  D.buildings.slice().sort(function(a,b){ return a.partIds.length - b.partIds.length; })
+    .forEach(function(b){
+      var st = bldStats(b);
+      s += '<button class="bldchip' + (st.glued === st.total ? ' done' : '') + '" data-b="' + esc(b.id) +
+           '" aria-pressed="' + String(bldFilter === b.id) + '">' + esc(b.id) +
+           '<span class="sub">' + st.glued + '/' + st.total + '</span></button>';
+    });
+  el('bldStrip').innerHTML = s;
+
+  var done = ALL.filter(isGlued).length;
+  var bev  = PARTS.reduce(function(a,p){ return a + edgesDone(p); }, 0);
+  el('modelTitle').textContent = done + '/' + ALL.length + ' glued · ' + bev + '/' + ALL_WORK + ' bevels';
+}
+el('bldStrip').addEventListener('click', function(ev){
+  var b = ev.target.closest('.bldchip'); if(!b) return;
+  var id = b.dataset.b || null;
+  bldFilter = (bldFilter === id) ? null : id;
+  applyStyles(); renderBldStrip();
+  if(bldFilter) frameBox(boxOf(BLD[bldFilter].partIds), 1.3);
+  else frameBox(boxOf(ALL.map(function(p){ return p.id; })), 1.12);
+});
+
+/* =====================================================================
+   7.  screen B - the part card
+   ===================================================================== */
+function partAlerts(p){
+  var a = [];
+  if(p.flags && p.flags.indexOf('notNested') >= 0)
+    a.push(['bad','⚠','This part is not on either board','It was never nested — there is no piece to fetch. It still has to be made from offcut before you can bevel or glue it.']);
+  if(p.flags && p.flags.indexOf('fallback') >= 0)
+    a.push(['warn','◇','Unmitered fallback','This face was too small to miter at T = ' + D.meta.thickness + ' mm, so parts of it are square by design. Do not hunt for a bevel that is not there.']);
+  if(STALE_BOARD.indexOf(p.id) >= 0){
+    var none = STALE_NONE.indexOf(p.id) >= 0;
+    a.push(['bad','✕','The angles written on the board are wrong for this part',
+      none ? 'The board shows no bevel callout at all for ' + p.id + ', but it needs ' + workEdges(p).length + '. Use the numbers below, not the board.'
+           : 'The board carries fewer callouts than this part needs — the labels were written from a stale dot set. Use the numbers below, not the board.']);
+  }
+  if(p.flags && p.flags.indexOf('sizeMatchOnly') >= 0)
+    a.push(['info','≈','Matched to its board outline on size only','The outline was hand-edited after nesting, so the board shape differs slightly from the model. Every edge here is square, so nothing depends on the exact fit.']);
+  var noMate = workEdges(p).filter(function(e){ return !e.mate; });
+  if(noMate.length)
+    a.push(['warn','◺','Bevel with nothing to meet it',
+      'Edge ' + noMate.map(function(e){ return 'e' + e.n; }).join(', ') +
+      ' is mitered against a face too small to be a part. Sand the angle, but expect nothing to register against it.']);
+  var sliv = workEdges(p).filter(function(e){ return e.len < SLIVER; });
+  if(sliv.length)
+    a.push(['info','·','Sliver edge',
+      'Edge ' + sliv.map(function(e){ return 'e' + e.n + ' (' + fmt(e.len,2) + ' mm)'; }).join(', ') +
+      ' — too short to sand as a real operation. Tick it off and move on.']);
+  var cl = CLASH[p.id];
+  if(cl && cl.length)
+    a.push(['info','⧉','Tight against ' + cl.map(function(c){ return c.other; }).join(', '),
+      'The model is thinner than 2 × T there, so these overlap slightly at ' +
+      cl.map(function(c){ return fmt(c.vol,1) + ' mm³'; }).join(', ') +
+      '. Expect to pare a little material at glue-up.']);
+  return a;
+}
+
+function renderCard(){
+  var p = BYID[route.id]; if(!p) return;
+  var plate = isPlate(p);
+  var w = workEdges(p), donec = edgesDone(p);
+  var ix = ORDIX[p.id];
+
+  el('partTitle').innerHTML = '<strong>' + esc(p.id) + '</strong> <span style="color:var(--fg3);font-weight:400">· ' +
+    (plate ? 'base plate' : 'building ' + esc(p.building)) + ' · step ' + (ix+1) + '/' + ORDER.length + '</span>';
+
+  var h = '';
+
+  /* alerts */
+  partAlerts(p).forEach(function(a){
+    h += '<div class="alert ' + a[0] + '"><span class="ico">' + a[1] + '</span><span><b>' +
+         esc(a[2]) + '</b>' + esc(a[3]) + '</span></div>';
+  });
+
+  /* state */
+  h += '<div class="sec"><div class="states">' +
+       '<button class="statebtn bev" id="sbBev" aria-pressed="' + String(isBevelled(p)) + '"' +
+         (w.length ? '' : ' disabled') + '>' +
+         (w.length ? 'bevelled ✓' : 'no bevels') +
+         '<small>' + (w.length ? donec + ' of ' + w.length + ' edges' : 'square as milled') + '</small></button>' +
+       '<button class="statebtn glue" id="sbGlue" aria-pressed="' + String(isGlued(p)) + '">glued ✓' +
+         '<small>' + (plate ? 'plate placed' : 'in the model') + '</small></button>' +
+       '</div></div>';
+
+  /* flat shape */
+  h += '<div class="sec"><h2>Flat true shape</h2><div class="draw">' + flatSVG(p, selEdge) + '</div>' +
+       '<div class="drawnote">You are looking at the <b>outer</b> face — the side that faces outward on the model. ' +
+       'Numbers are the sander label for each edge, small figure is its length in mm. ' +
+       'Dashed = already sanded.</div></div>';
+
+  /* the work */
+  if(!plate){
+    if(w.length){
+      h += '<div class="sec"><h2>Sand these ' + w.length + ' edges</h2><div class="panel">';
+      w.forEach(function(e){ h += edgeRow(p,e); });
+      h += '</div></div>';
+    }
+    var sq = p.edges.filter(function(e){ return !e.needsWork; });
+    if(sq.length){
+      h += '<div class="sec"><details class="acc panel"><summary>' + sq.length +
+           ' edges are already correct as milled</summary><div class="body" style="padding:0">';
+      sq.forEach(function(e){ h += edgeRow(p,e); });
+      h += '</div></details></div>';
+    }
+  }
+
+  /* board */
+  h += '<div class="sec"><h2>Where to find it</h2>';
+  if(p.board && p.board.sheet){
+    var sheetName = p.board.sheet.replace('FinalCNCBoard','Board ');
+    h += '<div class="panel pad" style="margin-bottom:8px"><div class="kv"><span>sheet</span><span>' +
+         esc(sheetName) + '</span></div><div class="kv"><span>position</span><span>x ' +
+         fmt(p.board.x,1) + ' &nbsp; y ' + fmt(p.board.y,1) + '</span></div>' +
+         '<div class="kv"><span>lies on the board</span><span>' +
+         (p.board.mirrored ? 'mirrored — outer face DOWN' : 'outer face UP') + '</span></div></div>';
+    var bs = boardSVG(p);
+    if(bs) h += '<div class="draw">' + bs + '</div>' +
+         '<div class="drawnote">This piece in orange. Dashed red outlines are the 11 leftover curves ' +
+         'from an earlier version of the model — milled into the board, but not parts. Do not use them.</div>';
+  }else{
+    h += '<div class="alert bad"><span class="ico">⚠</span><span><b>Not on any board</b>' +
+         'This part still has to be made.</span></div>';
+  }
+  h += '</div>';
+
+  /* note */
+  h += '<div class="sec"><h2>Note</h2><textarea class="note" id="partNote" placeholder="anything worth remembering about this piece">' +
+       esc((PROG[p.id] && PROG[p.id].n) || '') + '</textarea></div>';
+
+  /* nav */
+  var prevId = ORDER[ix-1], nextId = ORDER[ix+1];
+  h += '<div class="sec"><div class="btnrow">' +
+       (prevId ? '<button class="btn" data-goto="' + esc(prevId) + '">↑ ' + esc(prevId) + '</button>' : '') +
+       (nextId ? '<button class="btn primary" data-goto="' + esc(nextId) + '">next: ' + esc(nextId) + ' ↓</button>' : '') +
+       '</div></div>';
+
+  el('cardBody').innerHTML = h;
+}
+
+function edgeRow(p,e){
+  var k = edgeKind(e), done = e.needsWork && edgeDone(p,e.n);
+  var mate = e.mate ? ('meets <b style="display:inline;font-weight:700">' + esc(e.mate) + '</b>' +
+      (e.mateSet !== null && e.mateSet !== undefined
+        ? ' — that piece is also set to ' + fmt(e.mateSet,0) + '°' +
+          (Math.abs(e.mateSet - e.set) > 0.01 ? '<span class="badge bad">mismatch</span>' : '')
+        : ''))
+    : '<span style="color:var(--warn)">no mating part</span>';
+  return '<div class="edgerow' + (done ? ' done' : '') + (selEdge === e.n ? ' sel' : '') +
+         '" data-edge="' + e.n + '">' +
+    (e.needsWork
+      ? '<button class="tick" data-tick="' + e.n + '" aria-pressed="' + String(done) + '">✓</button>'
+      : '<span class="tick" style="border-style:dashed;opacity:.4"></span>') +
+    '<span class="chip k-' + k + '">' + esc(e.needsWork ? e.label : 'sq') + '</span>' +
+    '<span class="meta"><b>e' + e.n + ' · ' + fmt(e.len,1) + ' mm</b>' +
+      esc(edgeHow(e)).replace(/&#39;/g,"'") + '<br><span class="sub">' + mate + '</span></span>' +
+    '</div>';
+}
+
+el('cardBody').addEventListener('click', function(ev){
+  var p = BYID[route.id]; if(!p) return;
+  var t;
+  if((t = ev.target.closest('[data-goto]'))){ go('part', t.dataset.goto); return; }
+  if((t = ev.target.closest('#sbBev')))  { setBevelled(p, !isBevelled(p)); return; }
+  if((t = ev.target.closest('#sbGlue'))) { setGlued(p, !isGlued(p)); return; }
+  if((t = ev.target.closest('[data-tick]'))){
+    var n = +t.dataset.tick;
+    setEdge(p, n, !edgeDone(p,n));
+    return;
+  }
+  if((t = ev.target.closest('[data-edge]'))){
+    var en = +t.dataset.edge;
+    selEdge = (selEdge === en) ? null : en;
+    var e = p.edges.filter(function(q){ return q.n === en; })[0];
+    highlightEdge(selEdge === null ? null : e.seg3d);
+    renderCard();
+    return;
+  }
+});
+el('cardBody').addEventListener('input', function(ev){
+  if(ev.target.id !== 'partNote') return;
+  rec(route.id).n = ev.target.value; save();
+});
+el('btnBack').addEventListener('click', function(){ go('model'); });
+el('btnPrev').addEventListener('click', function(){
+  var i = ORDIX[route.id]; if(i > 0) go('part', ORDER[i-1]);
+});
+el('btnNext').addEventListener('click', function(){
+  var i = ORDIX[route.id]; if(i < ORDER.length-1) go('part', ORDER[i+1]);
+});
+
+/* =====================================================================
+   8.  screen L - the part list
+   ===================================================================== */
+var listMode = 'order';
+function partRow(p){
+  var col = isGlued(p) ? 'var(--glue)' : (isBevelled(p) ? 'var(--bev)' : 'var(--raw)');
+  var w = workEdges(p).length, dn = edgesDone(p);
+  var sub = isPlate(p) ? 'base plate'
+          : 'building ' + p.building + ' · ' + (w ? dn + '/' + w + ' bevels' : 'no bevels') +
+            (isGlued(p) ? ' · glued' : '');
+  var flag = '';
+  if(p.flags && p.flags.indexOf('notNested') >= 0) flag = '<span class="badge bad">not on a board</span>';
+  else if(STALE_BOARD.indexOf(p.id) >= 0) flag = '<span class="badge warn">board labels wrong</span>';
+  return '<button class="row" data-goto="' + esc(p.id) + '">' +
+    '<span class="dot" style="background:' + col + '"></span>' +
+    '<span class="grow"><span class="id">' + esc(p.id) + '</span>' + flag +
+    '<br><span class="sub">' + esc(sub) + '</span></span>' +
+    '<span style="color:var(--fg3)">›</span></button>';
+}
+function renderList(){
+  var q = (el('search').value || '').trim().toLowerCase();
+  var items = listMode === 'order'
+    ? ORDER.map(function(id){ return BYID[id]; })
+    : ALL.slice().sort(function(a,b){
+        var A = a.id.split('.'), B = b.id.split('.');
+        return (parseInt(A[0],10)||999) - (parseInt(B[0],10)||999) ||
+               (parseInt(A[1],10)||0)   - (parseInt(B[1],10)||0)   ||
+               a.id.localeCompare(b.id);
+      });
+  if(q) items = items.filter(function(p){
+    return p.id.toLowerCase().indexOf(q) >= 0 ||
+           (!isPlate(p) && ('building ' + p.building).indexOf(q) >= 0);
+  });
+  el('btnOrderMode').textContent = listMode === 'order' ? 'assembly order' : 'by number';
+  el('listBody').innerHTML = '<div class="panel">' +
+    (items.length ? items.map(partRow).join('') : '<div class="row"><span class="sub">nothing matches</span></div>') +
+    '</div>';
+}
+el('search').addEventListener('input', renderList);
+el('btnOrderMode').addEventListener('click', function(){
+  listMode = listMode === 'order' ? 'id' : 'order'; renderList();
+});
+el('listBody').addEventListener('click', function(ev){
+  var t = ev.target.closest('[data-goto]'); if(t) go('part', t.dataset.goto);
+});
+
+/* =====================================================================
+   9.  screen C - sander setups
+   ===================================================================== */
+var hideDoneSetups = false;
+function renderSetups(){
+  /* Group by what the MACHINE is set to, not by the printed label: "45" and "F45"
+     are one setup - same table angle, the piece just goes on the other way up.
+     Splitting them would hide the fact that 222 of the 430 bevels share a setting. */
+  var groups = {};
+  PARTS.forEach(function(p){
+    workEdges(p).forEach(function(e){
+      var key = e.set + (e.jig ? '|jig' : '');
+      var g = groups[key] || (groups[key] = { set:e.set, jig:e.jig, items:[] });
+      g.items.push({ p:p, e:e, done:edgeDone(p,e.n) });
+    });
+  });
+  var list = Object.keys(groups).map(function(k){ return groups[k]; });
+  list.forEach(function(g){ g.left = g.items.filter(function(i){ return !i.done; }).length; });
+  list.sort(function(a,b){ return b.left - a.left || b.items.length - a.items.length; });
+
+  var totalLeft = list.reduce(function(a,g){ return a + g.left; }, 0);
+  var h = '<div class="sec"><div class="panel pad">' +
+    '<div class="kv"><span>bevels remaining</span><span>' + totalLeft + ' of ' + ALL_WORK + '</span></div>' +
+    '<div class="kv"><span>distinct settings</span><span>' + list.length + '</span></div>' +
+    '<div class="kv"><span>setups still open</span><span>' +
+      list.filter(function(g){ return g.left > 0; }).length + '</span></div></div>' +
+    '<div class="drawnote">Grouped by machine setting, biggest batch first — set the table once, ' +
+    'work through the list. Tap an edge to open its part.</div></div>';
+
+  el('btnHideDoneSetups').textContent = hideDoneSetups ? 'show done' : 'hide done';
+
+  list.forEach(function(g){
+    if(hideDoneSetups && g.left === 0) return;
+    var k = g.jig ? 'jig' : 'plain';
+    var flips = g.items.filter(function(i){ return i.e.flip; }).length;
+    var how = 'Tilt the table to ' + fmt(g.set,0) + '°' + (g.jig ? ', on the 45° jig' : '') + '. ' +
+              (flips === 0 ? 'Every piece goes on the natural way up.'
+               : flips === g.items.length ? 'Every piece goes on flipped over.'
+               : flips + ' of these ' + g.items.length + ' go on flipped over — watch the badge.');
+    h += '<div class="sec"><details class="acc panel"' + (g.left > 0 && g.items.length > 6 ? ' open' : '') + '>' +
+      '<summary><span class="chip k-' + k + '">' + fmt(g.set,0) + (g.jig ? 'ᴶ' : '°') + '</span>' +
+      '<span style="flex:1;min-width:0"><span style="font-weight:700">' + g.left + ' left</span>' +
+      '<span style="color:var(--fg3);font-weight:400"> of ' + g.items.length + '</span>' +
+      '<br><span class="sub" style="font-size:11.5px;color:var(--fg3);font-weight:400">' + esc(how) + '</span></span>' +
+      '</summary><div class="body" style="padding:0">';
+    g.items.sort(function(a,b){ return (a.done?1:0)-(b.done?1:0) ||
+        (a.e.flip?1:0)-(b.e.flip?1:0) || ORDIX[a.p.id]-ORDIX[b.p.id] || a.e.n-b.e.n; });
+    g.items.forEach(function(i){
+      h += '<div class="edgerow' + (i.done ? ' done' : '') + '" data-goto="' + esc(i.p.id) + '">' +
+        '<button class="tick" data-sp="' + esc(i.p.id) + '" data-se="' + i.e.n +
+          '" aria-pressed="' + String(i.done) + '">✓</button>' +
+        '<span class="meta"><b>' + esc(i.p.id) + ' · e' + i.e.n +
+        (i.e.flip ? '<span class="badge warn">flip over</span>' : '') + '</b>' +
+        '<span class="sub">' + fmt(i.e.len,1) + ' mm' +
+        (i.e.mate ? ' · meets ' + esc(i.e.mate) : ' · no mate') +
+        ' · building ' + esc(i.p.building) + '</span></span>' +
+        '<span style="color:var(--fg3)">›</span></div>';
+    });
+    h += '</div></details></div>';
+  });
+  el('setupsBody').innerHTML = h;
+}
+el('btnHideDoneSetups').addEventListener('click', function(){
+  hideDoneSetups = !hideDoneSetups; renderSetups();
+});
+el('setupsBody').addEventListener('click', function(ev){
+  var t;
+  if((t = ev.target.closest('[data-sp]'))){
+    var p = BYID[t.dataset.sp], n = +t.dataset.se;
+    setEdge(p, n, !edgeDone(p,n));
+    return;
+  }
+  if((t = ev.target.closest('[data-goto]'))) go('part', t.dataset.goto);
+});
+
+/* =====================================================================
+   10.  screen P - progress, backup, model notes
+   ===================================================================== */
+function renderProgress(){
+  var glued = ALL.filter(isGlued).length;
+  var bevParts = PARTS.filter(isBevelled).length;
+  var bevEdges = PARTS.reduce(function(a,p){ return a + edgesDone(p); }, 0);
+  var bldDone = D.buildings.filter(function(b){ var s = bldStats(b); return s.glued === s.total; }).length;
+
+  function barRow(label, a, b, cls){
+    var pct = b ? Math.round(100*a/b) : 0;
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--line)">' +
+      '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">' +
+      '<span>' + esc(label) + '</span><span style="color:var(--fg2)">' + a + ' / ' + b +
+      ' &nbsp;<b>' + pct + '%</b></span></div>' +
+      '<div class="bar' + (cls ? ' ' + cls : '') + '"><i style="width:' + pct + '%"></i></div></div>';
+  }
+
+  var h = '<div class="sec"><h2>Where you are</h2><div class="panel pad">' +
+    barRow('bevels sanded', bevEdges, ALL_WORK, 'bev') +
+    barRow('parts fully bevelled', bevParts, PARTS.length, 'bev') +
+    barRow('parts glued', glued, ALL.length) +
+    barRow('buildings finished', bldDone, D.buildings.length) +
+    '</div></div>';
+
+  h += '<div class="sec"><h2>Backup</h2><div class="panel pad">' +
+    '<div class="drawnote" style="padding:0 0 10px">' +
+    (storageOK
+      ? 'Saved automatically in this browser. iOS can clear that storage on its own, so export a copy now and then — the file is also how you move progress between the phone and the laptop.'
+      : '<b style="color:var(--bad)">This browser is not letting the page save.</b> Nothing is being kept automatically. Export after every session.') +
+    '</div>' +
+    '<div class="btnrow"><button class="btn primary" id="btnExport">Export progress</button>' +
+    '<button class="btn" id="btnImport">Import…</button>' +
+    '<button class="btn danger" id="btnClear">Clear all</button></div>' +
+    '<div class="kv" style="margin-top:10px"><span>last saved</span><span>' +
+      (lastSaved ? esc(new Date(lastSaved).toLocaleString()) : 'never') + '</span></div>' +
+    '<div class="kv"><span>storage</span><span>' + (storageOK ? 'ok' : 'unavailable') + '</span></div>' +
+    '</div></div>';
+
+  h += '<div class="sec"><h2>Screen</h2><div class="panel pad">' +
+    '<div class="btnrow"><button class="btn" id="btnWake" aria-pressed="' + String(!!wakeLock) + '">' +
+    (wakeLock ? 'keep screen on: ON' : 'keep screen on: off') + '</button></div>' +
+    '<div class="drawnote" style="padding:8px 0 0">Stops the phone sleeping while you are at the sander. ' +
+    'Needs the page served over https (GitHub Pages), not opened from a file.</div></div></div>';
+
+  /* notes the user has written */
+  var noted = ALL.filter(function(p){ return PROG[p.id] && PROG[p.id].n; });
+  if(noted.length){
+    h += '<div class="sec"><h2>Your notes</h2><div class="panel">';
+    noted.forEach(function(p){
+      h += '<button class="row" data-goto="' + esc(p.id) + '"><span class="grow">' +
+        '<span class="id">' + esc(p.id) + '</span><br><span class="sub">' +
+        esc(PROG[p.id].n) + '</span></span><span style="color:var(--fg3)">›</span></button>';
+    });
+    h += '</div></div>';
+  }
+
+  /* model warnings, clashes folded away */
+  var plain = [], clashes = [];
+  D.warnings.forEach(function(w){ (/^Clash:/.test(w) ? clashes : plain).push(w); });
+  h += '<div class="sec"><h2>Model notes from the export</h2><div class="panel">' +
+    '<details class="acc"><summary>' + plain.length + ' things to know</summary><div class="body">' +
+    plain.map(function(w){ return '<p style="font-size:12.5px;color:var(--fg2);margin:0 0 10px">' +
+      esc(w) + '</p>'; }).join('') + '</div></details>' +
+    '<details class="acc"><summary>' + clashes.length + ' tight spots at glue-up</summary><div class="body">' +
+    '<p style="font-size:12.5px;color:var(--fg3);margin:0 0 10px">Places where the model is thinner ' +
+    'than 2 × ' + D.meta.thickness + ' mm, so two parts overlap slightly. Expect to pare a little material.</p>' +
+    clashes.map(function(w){ return '<p style="font-size:12.5px;color:var(--fg2);margin:0 0 6px">' +
+      esc(w.replace(/^Clash:\s*/,'')) + '</p>'; }).join('') + '</div></details></div></div>';
+
+  h += '<div class="sec"><h2>Data</h2><div class="panel pad">' +
+    '<div class="kv"><span>model</span><span>' + esc(D.meta.model) + '</span></div>' +
+    '<div class="kv"><span>exported</span><span>' + esc(D.meta.generated) + '</span></div>' +
+    '<div class="kv"><span>thickness</span><span>' + D.meta.thickness + ' mm</span></div>' +
+    '<div class="kv"><span>scale</span><span>' + esc(D.meta.scale) + '</span></div>' +
+    '<div class="kv"><span>parts / plates</span><span>' + PARTS.length + ' / ' + PLATES.length + '</span></div>' +
+    '<div class="kv"><span>bevels to sand</span><span>' + ALL_WORK + '</span></div>' +
+    '<div class="kv"><span>convention</span><span style="max-width:60%">' + esc(D.meta.angleConvention) + '</span></div>' +
+    '</div></div>';
+
+  el('progressBody').innerHTML = h;
+}
+el('progressBody').addEventListener('click', function(ev){
+  var t;
+  if((t = ev.target.closest('[data-goto]'))){ go('part', t.dataset.goto); return; }
+  if(ev.target.closest('#btnExport')) exportProgress();
+  if(ev.target.closest('#btnImport')) el('importFile').click();
+  if(ev.target.closest('#btnClear')){
+    if(confirm('Clear every tick and note? Export first if you are not sure.')){
+      PROG = {}; save(); applyStyles(); renderBldStrip(); renderProgress();
+      toast('Progress cleared.');
+    }
+  }
+  if(ev.target.closest('#btnWake')) toggleWake();
+});
+
+function exportProgress(){
+  var payload = {
+    tool:'AssemblyGuide', v:1,
+    model:D.meta.model, generated:D.meta.generated, dataHash:DATA_HASH,
+    exportedAt:new Date().toISOString(), parts:PROG
+  };
+  var d = new Date(), pad = function(n){ return (n<10?'0':'') + n; };
+  var name = 'assembly-progress-' + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) +
+             '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.json';
+  var blob = new Blob([JSON.stringify(payload,null,1)], { type:'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+  toast('Exported ' + name);
+}
+el('importFile').addEventListener('change', function(ev){
+  var f = ev.target.files && ev.target.files[0];
+  if(!f) return;
+  var fr = new FileReader();
+  fr.onload = function(){
+    var o;
+    try{ o = JSON.parse(fr.result); }
+    catch(err){ toast('That file is not readable JSON.'); return; }
+    var parts = o && (o.parts || o.progress || o);
+    if(!parts || typeof parts !== 'object'){ toast('No progress found in that file.'); return; }
+    var unknown = Object.keys(parts).filter(function(id){ return !BYID[id]; });
+    var known   = Object.keys(parts).length - unknown.length;
+    var msg = 'Import ' + known + ' parts?';
+    if(o.dataHash && o.dataHash !== DATA_HASH)
+      msg += '\n\nWarning: this file was made against a different export of the model.';
+    if(unknown.length)
+      msg += '\n\n' + unknown.length + ' ids in the file are not in this model and will be skipped:\n' +
+             unknown.slice(0,8).join(', ') + (unknown.length > 8 ? ' …' : '');
+    msg += '\n\nThis replaces what is currently saved.';
+    if(!confirm(msg)) { ev.target.value = ''; return; }
+    var next = {};
+    Object.keys(parts).forEach(function(id){
+      if(!BYID[id]) return;
+      var s = parts[id] || {};
+      next[id] = { b:!!s.b, g:!!s.g, n:typeof s.n === 'string' ? s.n : '', e:s.e || {} };
+      /* a file written before per-edge ticks existed: expand the part flag */
+      if(next[id].b && !Object.keys(next[id].e).length)
+        workEdges(BYID[id]).forEach(function(e){ next[id].e[e.n] = 1; });
+    });
+    PROG = next; save();
+    applyStyles(); renderBldStrip(); renderProgress();
+    toast('Imported ' + known + ' parts.');
+    ev.target.value = '';
+  };
+  fr.readAsText(f);
+});
+
+/* =====================================================================
+   11.  wake lock
+   ===================================================================== */
+var wakeLock = null, wakeWanted = false;
+function toggleWake(){
+  wakeWanted = !wakeWanted;
+  if(wakeWanted) requestWake(); else releaseWake();
+}
+function requestWake(){
+  if(!navigator.wakeLock){ toast('This browser has no wake lock. Set the auto-lock longer instead.'); wakeWanted = false; renderProgress(); return; }
+  navigator.wakeLock.request('screen').then(function(l){
+    wakeLock = l;
+    l.addEventListener('release', function(){ wakeLock = null; if(route.name === 'progress') renderProgress(); });
+    if(route.name === 'progress') renderProgress();
+    toast('Screen will stay on.');
+  }).catch(function(){
+    wakeWanted = false; toast('Wake lock refused — needs https.');
+    if(route.name === 'progress') renderProgress();
+  });
+}
+function releaseWake(){
+  if(wakeLock){ wakeLock.release(); wakeLock = null; }
+  if(route.name === 'progress') renderProgress();
+  toast('Screen may sleep again.');
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && wakeWanted && !wakeLock) requestWake();
+});
+
+/* =====================================================================
+   12.  chrome wiring + boot
+   ===================================================================== */
+el('tabbar').addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-route]'); if(b) go(b.dataset.route);
+});
+el('btnFitAll').addEventListener('click', function(){ frameAll(false); applyStyles(); });
+el('hudFit').addEventListener('click', function(){
+  if(route.name === 'part'){
+    var p = BYID[route.id];
+    frameBox(boxOf([p.id]), isPlate(p) ? 1.4 : 2.4);
+  }else if(bldFilter){
+    frameBox(boxOf(BLD[bldFilter].partIds), 1.3);
+  }else{
+    frameAll(false);
+  }
+});
+el('hudCtx').addEventListener('click', function(){
+  showContext = !showContext;
+  el('hudCtx').classList.toggle('on', showContext);
+  applyStyles();
+});
+el('hudCtx').classList.add('on');
+
+window.addEventListener('resize', function(){ requestAnimationFrame(resize); });
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 250); });
+if(window.ResizeObserver) new ResizeObserver(resize).observe(el('viewport'));
+
+/* keyboard, for the laptop */
+document.addEventListener('keydown', function(ev){
+  if(/^(INPUT|TEXTAREA)$/.test(ev.target.tagName)) return;
+  if(route.name === 'part'){
+    var i = ORDIX[route.id];
+    if(ev.key === 'ArrowRight' || ev.key === 'j'){ if(i < ORDER.length-1) go('part', ORDER[i+1]); }
+    if(ev.key === 'ArrowLeft'  || ev.key === 'k'){ if(i > 0) go('part', ORDER[i-1]); }
+    if(ev.key === 'Escape') go('model');
+    if(ev.key === 'b'){ var p = BYID[route.id]; if(workEdges(p).length) setBevelled(p, !isBevelled(p)); }
+    if(ev.key === 'g'){ setGlued(BYID[route.id], !isGlued(BYID[route.id])); }
+  }
+});
+
+/* service worker - only makes sense on a real origin */
+if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){ /* offline is a bonus, not a blocker */ });
+  });
+}
+
+try{
+  buildScene();
+  el('boot').hidden = true;
+  el('app').hidden = false;
+  applyRoute();
+  /* buildScene framed the model while #viewport was still full-window, so the
+     aspect it used was wrong. Re-frame once it is sitting in its real stage. */
+  requestAnimationFrame(function(){
+    resize();
+    if(route.name !== 'part') frameAll(true);
+  });
+  if(!storageOK) setTimeout(function(){
+    toast('This browser will not save progress — use Export on the Progress tab.');
+  }, 1200);
+}catch(err){
+  el('boot').innerHTML = '<div style="padding:24px;text-align:center;color:#ffb4b4">' +
+    'Could not start the 3D view.<br><br><code style="font-size:11px">' + esc(err.message) + '</code></div>';
+  throw err;
+}
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+SOURCE
+  document      : C:\Users\nrahn\Downloads\260728_1zu200 Umgebungsgebäude.3dm
+  GH inputs     : Sp=14  Sb=1  T=4.00  M=0
+  live TB lines : 1048
+  re-run        : parts=138 plates=3 P=138 B=3 joints=221 fallbacks=7.11
+
+FIDELITY CHECK  (regenerated vs the component's own live output)
+  bevel table     live=727   regenerated=727    IDENTICAL
+  joint schedule  live=225   regenerated=225    IDENTICAL
+
+BOARD MATCHING
+  board curves  : 150  (confirmed 131, probable 7, leftover 11, sheet outline 1)
+  parts located : 138 of 141      mirrored on the board: 21
+  orphan angle dots: 0
+
+EDGES
+  edge rows     : 726      (bevel table rows: 726)
+  needing work  : 430      already square as milled: 296
+  flip / jig    : 113 / 38      at the 45 setting: 222
+  distinct settings: 34
+
+MESHES
+  triangles     : 10829   vertices: 9819   (avg 77 tri/part)
+
+GEOMETRY CURRENCY  (baked Final::FinalOutputFlat vs the live solve)
+  outlines compared : 141      drifted: 0
+  worst difference  : BP2  perimeter 0.0021 mm, area 0.167 mm2
+
+BAKED ANGLE DOTS  (Final::FinalTextDots, the source of the board labels)
+  non-square edges live : 446
+  angle dots baked      : 405
+  parts where they disagree: 12
+    2.1      live  6, baked  0
+    2.3      live  7, baked  1
+    2.4      live  6, baked  0
+    2.7      live  3, baked  1
+    5.5      live  4, baked  2
+    5.8      live  5, baked  1
+    5.11     live  3, baked  1
+    6.6      live  4, baked  2
+    6.32     live  5, baked  1
+    7.25     live  7, baked  2
+    9.3      live  3, baked  2
+    9.4      live  2, baked  1
+
+BUILDINGS
+  count         : 14      parts each: 7, 13, 6, 6, 12, 33, 26, 7, 4, 5, 5, 5, 4, 5
+
+ASSEMBLY ORDER
+  sequenced     : 141 of 141 parts
+  parts placed with no joint to the already-placed set: 0
+
+BOARD FinalCNCBoard1
+  curves 91  ->  parts 77, closed leftovers 10, open marks 4, closed sheet outline no
+  sheet extent  : 850.0 x 850.0 mm
+
+BOARD FinalCNCBoard2
+  curves 63  ->  parts 61, closed leftovers 1, open marks 0, closed sheet outline yes
+  sheet extent  : 647.0 x 850.0 mm
+
+WARNINGS (29)
+  - Parts 7.8, 7.9, 7.10 are not nested on either board and still have to be made.
+  - 11 closed curves milled into the boards match no part - they are leftovers from an earlier version of the model and are shown greyed out. Do not use them.
+  - BP2 was matched to its board curve on size alone (+2.9% area); the plate outline was hand-edited after nesting. Every plate edge is square, so nothing depends on the exact fit.
+  - BP3 was matched to its board curve on size alone (+2.3% area); the plate outline was hand-edited after nesting. Every plate edge is square, so nothing depends on the exact fit.
+  - BP1 was matched to its board curve on size alone (+5.6% area); the plate outline was hand-edited after nesting. Every plate edge is square, so nothing depends on the exact fit.
+  - Part 7.11 is an unmitered fallback - a face too small to miter at T=4.0. Its edges are square; do not hunt for a bevel that is not there.
+  - The angle labels drawn on the CNC boards are INCOMPLETE. They were written from a stale set of bevel dots (405 dots for 446 bevelled edges), so 12 parts carry fewer callouts on the board than they need: 2.1, 2.3, 2.4, 2.7, 5.5, 5.8, 5.11, 6.6, 6.32, 7.25, 9.3, 9.4. Trust this tool, not the numbers on the board. Worst of all, 2.1 and 2.4 show no bevel callout at all on the board and in fact need 6, 6.
+  - These edges are mitered against a face too small to be a part, so they have no mating piece to register against: 7.11 e3 (55.83 mm), 7.12 e1 (55.83 mm). Sand the angle, but expect nothing to meet it.
+  - Clash: 7.12 x 7.16 518.24 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 1.2 x 1.7 510.43 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 3.3 x 3.6 112.95 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.19 x 7.21 108.68 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.21 x 7.24 27.13 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 6.1 x 6.6 21.11 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 2.11 x 3.4 19.64 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 5.5 x 5.12 18.46 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 8.2 x 8.6 18.19 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 5.4 x 5.5 12.20 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 2.8 x 2.13 11.83 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 5.5 x 5.8 9.76 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 6.23 x 6.26 8.06 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 6.21 x 6.30 6.58 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.11 x 7.12 5.10 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 9.4 x 14.3 4.73 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 1.2 x 3.1 2.61 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.4 x 7.6 2.59 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.4 x 7.7 1.19 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - Clash: 7.7 x 7.8 0.98 mm3 REAL CLASH - the model is thinner than 2*T there.
+  - SKIPPED  Sp[6].F11  area 0.012 < 0.50 (degenerate sliver)
+
+OUTPUT
+  C:\Users\nrahn\Documents\AssemblyGuide\assembly_data.js
+  534.7 KB
