@@ -55,6 +55,13 @@ JIG_EPS    = 0.5
 FIT_OK     = 0.25
 FIT_MAYBE  = 1.50
 
+# The recut sheet, baked into the document by the recut pass. See
+# docs/Recut_HANDOFF.md - additive layers, nothing else in the model was touched.
+RECUT_OUTLINES = "Recut::Outlines"
+RECUT_LABELS   = "Recut::Labels"
+IGNORABLE_MM   = 0.5      # below this the shortfall sands away; call it out, do not re-cut
+SIL_SNAP       = 5.0      # how far a silhouette may sit from its own face outline
+
 UTF8 = System.Text.UTF8Encoding(False)     # no BOM - a BOM breaks `# coding:`
 
 execfile(HELPERS, globals())               # doc, BOARDS, centroid, area_of, ...
@@ -311,6 +318,71 @@ def mesh_of(brep):
     return m
 
 
+def raw_silhouette(brep, plane):
+    """The outline of the SOLID seen along the face normal, as a list of points.
+
+    The nest was built from the outer FACE outline. At a reentrant corner
+    (bevel > 90) the inner face steps out past that outline by T/|tan(bevel)|,
+    so the true blank is bigger than the face it came from - which is exactly
+    how 52 panels came to be milled undersize. Same method that produced the
+    baked Recut layer; exact for planar-faced solids.
+
+    Whether GetOutlines answers in world coordinates or in the plane's own frame
+    is settled later, once, by seeing which reading lands on the face outline -
+    see section 7b. Here we only pick the largest closed loop.
+    """
+    ms = rg.Mesh.CreateFromBrep(brep, rg.MeshingParameters.Default)
+    m = rg.Mesh()
+    for x in (ms or []):
+        m.Append(x)
+    if m.Vertices.Count == 0:
+        return None
+    m.Weld(math.pi)                       # 180 deg: one welded shell, no seam edges
+    try:
+        outs = m.GetOutlines(plane)
+    except Exception:
+        return None
+    if not outs:
+        return None
+    # rank by perimeter, which is the one measure that means the same thing in
+    # either coordinate reading
+    best, bl = None, -1.0
+    for pl in outs:
+        if pl is None or pl.Count < 4 or not pl.IsClosed:
+            continue
+        L = pl.Length
+        if L > bl:
+            bl, best = L, pl
+    if best is None:
+        return None
+    return [best[i] for i in range(best.Count)]
+
+
+def bbox2(pts):
+    xs = [q.X for q in pts]
+    ys = [q.Y for q in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def moved(pts, xf):
+    out = []
+    for q in pts:
+        r = rg.Point3d(q)
+        r.Transform(xf)
+        out.append(r)
+    return out
+
+
+def area2(pts):
+    """Twice the signed XY area of a closed point ring."""
+    s = 0.0
+    n = len(pts)
+    for i in range(n):
+        a, b = pts[i], pts[(i + 1) % n]
+        s += a.X * b.Y - b.X * a.Y
+    return s
+
+
 def f2(x):
     s = "%.2f" % x
     if s.endswith(".00"):
@@ -395,6 +467,10 @@ for pi, p in enumerate(layout):
             "n": i,
             "len": seg.GetLength(),
             "shown": shown,
+            # the UNrounded fold angle; the reentrant test and the shortfall are
+            # computed from this, not from `shown` - 135.5 and 136.4 both print as
+            # 136 but overhang by 4.07 and 4.20 mm
+            "bevelExact": float(r["bevel"]),
             "set": setting,
             "flip": flip,
             "jig": jig,
@@ -414,6 +490,12 @@ for pi, p in enumerate(layout):
         "outline": outline, "min": mn, "outerUp": outer_up,
         "edges": edges, "bb": bb, "minZ": bb.Min.Z,
         "cz": brep.GetBoundingBox(True).Center.Z,
+        # base plates keep the face outline: every plate edge is square, so face
+        # and silhouette are the same shape, and the plate curves were hand-edited
+        # after nesting anyway
+        "silRaw": (None if is_plate else raw_silhouette(brep, p["plane"])),
+        "xform": xf, "plane": p["plane"],
+        "sil": None, "milled": None, "blank": None,
     })
 
 # mateSet: the other half of each joint
@@ -430,6 +512,110 @@ for j, members in by_joint.items():
 for r in part_rows:
     for e in r["edges"]:
         e.setdefault("mateSet", None)
+
+
+# ------------------------------------------- 7b. the true blank silhouette
+# Settle the coordinate reading of GetOutlines ONCE, by asking which reading puts
+# each silhouette on top of the face outline it came from. A wrong reading is out
+# by the distance from the world origin - tens of metres on this model - so the
+# two candidates are never close and the choice is not a judgement call.
+
+def sil_offsets(key):
+    """max distance from a silhouette's bbox centre to its face outline's, mm"""
+    worst, worst_id = -1.0, "-"
+    for r in part_rows:
+        if not r["silRaw"]:
+            continue
+        pts = moved(r["silRaw"], r["xform"]) if key == "world" else r["silRaw"]
+        sx0, sy0, sx1, sy1 = bbox2(pts)
+        fx0, fy0, fx1, fy1 = bbox2(r["outline"])
+        d = math.hypot((sx0 + sx1 - fx0 - fx1) * 0.5, (sy0 + sy1 - fy0 - fy1) * 0.5)
+        if d > worst:
+            worst, worst_id = d, r["id"]
+    return worst, worst_id
+
+
+say("")
+say("SILHOUETTES  (the true blank: the solid seen along the face normal)")
+n_sil = len([r for r in part_rows if r["silRaw"]])
+say("  built         : %d of %d parts" % (n_sil, len([r for r in part_rows if not r["isPlate"]])))
+if n_sil == 0:
+    raise Exception("Mesh.GetOutlines produced nothing - cannot build the true outlines")
+
+readings = dict((k, sil_offsets(k)) for k in ("world", "plane"))
+for k in sorted(readings):
+    say("  reading %-6s: worst offset from its face outline %.3f mm  (%s)"
+        % (k, readings[k][0], readings[k][1]))
+READING = min(readings, key=lambda k: readings[k][0])
+if readings[READING][0] > SIL_SNAP:
+    raise Exception("Neither reading of Mesh.GetOutlines lands on the face outlines "
+                    "(best %.1f mm on %s) - do not trust the result"
+                    % (readings[READING][0], readings[READING][1]))
+say("  using         : %s coordinates" % READING)
+
+# per-part: the silhouette in flat layout space, its own bbox min, and how far the
+# inner face overhangs the outline that was actually machined
+n_reent = n_under = n_ign = 0
+worst_grow = 0.0
+worst_grow_id = "-"
+for r in part_rows:
+    over = []
+    for e in r["edges"]:
+        b = e.get("bevelExact")
+        if b is None or b <= 90.0 + 1e-6:
+            continue
+        t = math.tan(math.radians(b))
+        if abs(t) < 1e-9:
+            continue
+        over.append((e["n"], abs(T_in / t)))
+    if r["silRaw"]:
+        r["sil"] = moved(r["silRaw"], r["xform"]) if READING == "world" else r["silRaw"]
+    if not over:
+        # With no reentrant edge the silhouette IS the face outline, so leave the
+        # face outline in place rather than swap in a re-meshed copy of the same
+        # shape. That keeps these 86 parts byte-identical to the deployed data -
+        # which is the check that proves this pass disturbed nothing else.
+        continue
+    n_reent += len(over)
+    if not r["sil"]:
+        raise Exception("%s has %d reentrant edges but no silhouette could be built"
+                        % (r["id"], len(over)))
+    x0, y0, x1, y1 = bbox2(r["sil"])
+    fx0, fy0, fx1, fy1 = bbox2(r["outline"])
+    grow = max(fx0 - x0, fy0 - y0, x1 - fx1, y1 - fy1)
+    if grow > worst_grow:
+        worst_grow, worst_grow_id = grow, r["id"]
+    short = max(a for (_, a) in over)
+    n_under += 1
+    ignorable = short < IGNORABLE_MM
+    if ignorable:
+        n_ign += 1
+    r["milled"] = r["outline"]          # what the CNC actually cut
+    # the outline and the edge segments share an origin: move both or neither
+    r["min"] = rg.Point3d(x0, y0, 0.0)
+    r["blank"] = {"status": "undersize", "shortBy": short, "ignorable": ignorable,
+                  "edges": [n for (n, _) in over]}
+
+say("  reentrant edges : %d      panels affected: %d      under %.1f mm (sands away): %d"
+    % (n_reent, n_under, IGNORABLE_MM, n_ign))
+say("  widest overhang : %.3f mm on %s" % (worst_grow, worst_grow_id))
+
+# Cross-check, not a gate: on a part with no reentrant edge the silhouette and the
+# face outline are the same shape, so their areas must agree. They are computed by
+# completely different routes - mesh outline vs face loop - so agreement here is
+# real evidence that the silhouettes used for the other 52 are right.
+drift = []
+for r in part_rows:
+    if r["blank"] or not r["sil"]:
+        continue
+    a_face = abs(area2(r["outline"])) * 0.5
+    a_sil = abs(area2(r["sil"])) * 0.5
+    if abs(a_sil - a_face) > max(1.0, 0.002 * a_face):
+        drift.append((r["id"], a_face, a_sil))
+say("  unaffected parts cross-checked: %d      area disagreements: %d"
+    % (len([r for r in part_rows if r["sil"] and not r["blank"]]), len(drift)))
+for (i, a, b) in drift[:10]:
+    say("    %-8s face %.1f mm2 vs silhouette %.1f mm2" % (i, a, b))
 
 n_edges = sum(len(r["edges"]) for r in part_rows)
 n_work = sum(len([e for e in r["edges"] if e["needsWork"]]) for r in part_rows)
@@ -609,6 +795,104 @@ for bn in BOARDS:
     say("  sheet extent  : %.1f x %.1f mm" % (bb.Max.X - bb.Min.X, bb.Max.Y - bb.Min.Y))
 
 
+# --------------------------------------------------------- 10b. recut sheet
+# The 52 corrected silhouettes are baked in the document as Recut::Outlines with
+# a label dot each. Read the layout from the geometry rather than re-packing it
+# here: that block is what he will actually machine.
+
+recut_crvs = [o.Geometry for o in lay_objs(RECUT_OUTLINES)
+              if isinstance(o.Geometry, rg.Curve) and o.Geometry.IsClosed]
+recut_dots = [o.Geometry for o in lay_objs(RECUT_LABELS)
+              if isinstance(o.Geometry, rg.TextDot)]
+
+say("")
+say("RECUT SHEET  (%s / %s)" % (RECUT_OUTLINES, RECUT_LABELS))
+say("  closed outlines : %d      label dots: %d" % (len(recut_crvs), len(recut_dots)))
+
+# match each outline to the dot sitting in it. These dots were placed by the recut
+# pass, one per curve, so nearest-centre is unambiguous - but check that, rather
+# than assume it: a silently swapped pair would send him to the wrong blank.
+recut_pairs = []
+used = set()
+for c in recut_crvs:
+    bb = c.GetBoundingBox(True)
+    cx = (bb.Min.X + bb.Max.X) * 0.5
+    cy = (bb.Min.Y + bb.Max.Y) * 0.5
+    ranked = sorted(range(len(recut_dots)),
+                    key=lambda i: math.hypot(recut_dots[i].Point.X - cx,
+                                             recut_dots[i].Point.Y - cy))
+    pick = None
+    for i in ranked:
+        if i not in used:
+            pick = i
+            break
+    if pick is None:
+        continue
+    used.add(pick)
+    recut_pairs.append((recut_dots[pick].Text.strip().replace("*", ""), c))
+
+recut_of = {}
+dupes = []
+for (pid_s, c) in recut_pairs:
+    if pid_s in recut_of:
+        dupes.append(pid_s)
+    recut_of[pid_s] = c
+
+recut_unknown = sorted([i for i in recut_of if i not in row_of])
+say("  matched to a part id : %d      duplicate ids: %d      ids not in the model: %d %s"
+    % (len(recut_of), len(dupes), len(recut_unknown), ",".join(recut_unknown) or ""))
+
+undersize_ids = sorted([r["id"] for r in part_rows if r["blank"]],
+                       key=lambda s: [int(x) for x in s.split(".")] if "." in s else [999])
+missing_recut = [i for i in undersize_ids if i not in recut_of]
+extra_recut = [i for i in recut_of if i not in undersize_ids]
+say("  undersize parts      : %d      with no recut outline: %d %s"
+    % (len(undersize_ids), len(missing_recut), ",".join(missing_recut) or ""))
+if extra_recut:
+    say("  recut outlines for parts the export does not call undersize: %s"
+        % ",".join(sorted(extra_recut)))
+
+recut_bb = rg.BoundingBox.Empty
+recut_area = 0.0
+recut_outs = []
+for (pid_s, c) in sorted(recut_of.items()):
+    recut_bb.Union(c.GetBoundingBox(True))
+    a = area_of(c)
+    if a > 0:
+        recut_area += a
+    recut_outs.append((pid_s, poly_pts(c)))
+    ctr = centroid(c)
+    r = row_of.get(pid_s)
+    if r and r["blank"]:
+        # `board` still points at where the ORIGINAL piece was milled - the tool
+        # needs that to tell him it is scrap. This is where the replacement is.
+        r["blank"]["sheet"] = "Recut"
+        r["blank"]["x"] = ctr.X
+        r["blank"]["y"] = ctr.Y
+        r["blank"]["mirrored"] = False      # the block is laid out outer face up
+
+if recut_outs:
+    board_maps["Recut"] = {"bb": recut_bb, "outlines": recut_outs,
+                           "leftovers": [], "sheet": None, "marks": []}
+    say("  block           : %.1f x %.1f mm at (%.1f, %.1f)      part area %.0f mm2 (%.2f m2)"
+        % (recut_bb.Max.X - recut_bb.Min.X, recut_bb.Max.Y - recut_bb.Min.Y,
+           recut_bb.Min.X, recut_bb.Min.Y, recut_area, recut_area / 1e6))
+else:
+    say("  *** no recut geometry found - the Recut board map is NOT in this export ***")
+
+# the per-part table, so this export can be diffed against
+# docs/Undersized_Panels_REPORT.txt rather than taken on trust
+say("")
+say("  part      short   edges                 recut at            was milled on")
+for pid_s in sorted(undersize_ids, key=lambda i: -row_of[i]["blank"]["shortBy"]):
+    b = row_of[pid_s]["blank"]
+    bd = board_of.get(pid_s)
+    say("  %-8s %6.2f   %-20s  %-18s  %s"
+        % (pid_s, b["shortBy"], ",".join("e%d" % n for n in b["edges"]),
+           ("%.1f, %.1f" % (b["x"], b["y"])) if b.get("sheet") else "NOT ON THE SHEET",
+           (bd["sheet"] if bd else "not nested")))
+
+
 # ------------------------------------------------------------ 11. warnings
 
 not_nested = sorted([r["id"] for r in part_rows if r["id"] not in board_of],
@@ -652,6 +936,22 @@ for L in TB_live:
         warnings.append(L.strip())
 warnings.extend("Assembly order: " + w for w in order_warn)
 
+# first, because it is the reason 48 pieces on the boards are firewood
+n_needed = len([r for r in part_rows if r["blank"] and not r["blank"]["ignorable"]])
+if undersize_ids:
+    warnings.insert(0, "%d panels were milled undersize because the nest used the face outline "
+                       "instead of the miter silhouette. %d need re-cutting from the Recut sheet; "
+                       "the originals are scrap. The other %d are short by less than %.1f mm and "
+                       "sand out." % (len(undersize_ids), n_needed,
+                                      len(undersize_ids) - n_needed, IGNORABLE_MM))
+if missing_recut:
+    warnings.insert(1, "No corrected outline is baked for %s, so %s not on the Recut sheet even "
+                       "though the piece on the board is too small. Cut %s by hand from the "
+                       "dimensions on the part card."
+                    % (", ".join(missing_recut),
+                       "it is" if len(missing_recut) == 1 else "they are",
+                       "it" if len(missing_recut) == 1 else "them"))
+
 say("")
 say("WARNINGS (%d)" % len(warnings))
 for w in warnings:
@@ -664,12 +964,21 @@ O = []
 O.append("// Generated by rhino/export_assembly_json.py - do not edit by hand.")
 O.append("window.ASSEMBLY = {")
 
+recut_meta = ""
+if undersize_ids:
+    recut_meta = (',"recut":{"parts":%d,"needed":%d,"ignorable":%d,'
+                  '"blockW":%s,"blockH":%s,"areaMm2":%s}'
+                  % (len(undersize_ids), n_needed, len(undersize_ids) - n_needed,
+                     f1(recut_bb.Max.X - recut_bb.Min.X) if recut_outs else "0",
+                     f1(recut_bb.Max.Y - recut_bb.Min.Y) if recut_outs else "0",
+                     f1(recut_area)))
+
 O.append('"meta":{"model":%s,"units":"mm","scale":"1:200","thickness":%s,'
          '"machine":"disc sander, tilting table, 0-45 plus a 45 deg jig",'
          '"angleConvention":"shown = half fold; table = 90 - shown; flip if negative; jig above 45",'
-         '"generated":%s},'
+         '"generated":%s%s},'
          % (js(System.IO.Path.GetFileName(doc.Path)), f1(T_in),
-            js(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"))))
+            js(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm")), recut_meta))
 
 b_out = []
 for b in bld_rows:
@@ -708,6 +1017,32 @@ def edge_js(e, mn):
                e["joint"], fs, a3(e["seg3d"])))
 
 
+def flat_js(r):
+    """`outline` is the TRUE blank. `milledOutline` is the smaller shape the CNC
+    actually cut, on the same origin, so the card can hatch the missing strip."""
+    pts = r["sil"] if r["blank"] else r["outline"]
+    s = '"outline":%s' % a2(pts, r["min"])
+    if r["milled"]:
+        s += ',"milledOutline":%s' % a2(r["milled"], r["min"])
+    s += ',"outerFaceUp":%s' % ("true" if r["outerUp"] else "false")
+    return s
+
+
+def blank_js(r):
+    b = r["blank"]
+    if not b:
+        return ""
+    bits = ['"status":%s' % js(b["status"]),
+            '"shortBy":%s' % f2(b["shortBy"]),
+            '"ignorable":%s' % ("true" if b["ignorable"] else "false"),
+            '"edges":[%s]' % ",".join(str(n) for n in b["edges"])]
+    if b.get("sheet"):
+        bits.append('"sheet":%s,"x":%s,"y":%s,"mirrored":%s'
+                    % (js(b["sheet"]), f2(b["x"]), f2(b["y"]),
+                       "true" if b["mirrored"] else "false"))
+    return ',"blank":{%s}' % ",".join(bits)
+
+
 p_out, pl_out = [], []
 for r in part_rows:
     flags = []
@@ -718,23 +1053,24 @@ for r in part_rows:
     bd = board_of.get(r["id"])
     if bd and not bd["exact"]:
         flags.append("sizeMatchOnly")
+    if r["blank"]:
+        flags.append("undersize")
     board_js = ("null" if not bd else
                 '{"sheet":%s,"x":%s,"y":%s,"mirrored":%s}'
                 % (js(bd["sheet"]), f2(bd["x"]), f2(bd["y"]),
                    "true" if bd["mirrored"] else "false"))
     if r["isPlate"]:
-        pl_out.append('{"id":%s,"area":%s,"mesh":%s,"flat":{"outline":%s,"outerFaceUp":%s},'
+        pl_out.append('{"id":%s,"area":%s,"mesh":%s,"flat":{%s},'
                       '"board":%s,"flags":[%s]}'
-                      % (js(r["id"]), f2(r["area"]), mesh_js(r["mesh"]),
-                         a2(r["outline"], r["min"]), "true" if r["outerUp"] else "false",
+                      % (js(r["id"]), f2(r["area"]), mesh_js(r["mesh"]), flat_js(r),
                          board_js, ",".join(js(f) for f in flags)))
         continue
     p_out.append('{"id":%s,"building":%s,"area":%s,"mesh":%s,'
-                 '"flat":{"outline":%s,"outerFaceUp":%s},"edges":[%s],"board":%s,"flags":[%s]}'
+                 '"flat":{%s},"edges":[%s],"board":%s%s,"flags":[%s]}'
                  % (js(r["id"]), js(r["building"]), f2(r["area"]), mesh_js(r["mesh"]),
-                    a2(r["outline"], r["min"]), "true" if r["outerUp"] else "false",
+                    flat_js(r),
                     ",".join(edge_js(e, r["min"]) for e in r["edges"]),
-                    board_js, ",".join(js(f) for f in flags)))
+                    board_js, blank_js(r), ",".join(js(f) for f in flags)))
 
 O.append('"parts":[' + ",".join(p_out) + "],")
 O.append('"plates":[' + ",".join(pl_out) + "],")

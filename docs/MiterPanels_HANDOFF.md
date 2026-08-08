@@ -107,6 +107,26 @@ System.Guid and the script silently outputs nothing (NO error):
   meet - the exact 3D solution at such a vertex is a small pyramid the per-edge construction
   approximates; irrelevant at 1:200 where kerf alone is ~0.2 mm).
 
+## KNOWN TOOL BUG - `FL` emits the face outline, not the blank  (found 2026-08-08)
+`FL` is built from the **outer face outline** of each panel, which at `M=0` is the original face.
+That is not the shape the panel needs to be cut from. The per-edge setback is `a = T / tan(bevel)`:
+
+- **convex** corner (bevel < 90): setback positive, the inner face steps *back* - the face outline
+  is the true silhouette, so `FL` is right
+- **reentrant** corner (bevel > 90): setback **negative**, the inner face extends **past** the face
+  outline by `T/|tan(bevel)|` - so the blank has to be **bigger** than the face it came from
+
+On this project that made **52 of 138 panels undersize** across 70 reentrant edges, worst 4.35 mm
+(`6.6`, `6.7`); 48 had to be re-cut. See `docs/Recut_HANDOFF.md`,
+`docs/Undersized_Panels_REPORT.txt`.
+
+**Not fixed, deliberately.** Changing `FL` re-solves the definition, which shifts the flat layout,
+which invalidates the board matching and every part number and angle label already milled onto the
+boards and baked into `Final::FinalTextDots`. Fix it the next time the model is regenerated from
+scratch: emit the silhouette of the solid seen along the face normal
+(`Mesh.CreateFromBrep` -> `Weld(180)` -> `GetOutlines(facePlane)`, largest closed loop), not the
+face loop. The Assembly Guide exporter already does exactly that for `flat.outline`.
+
 ## Open issues for THIS project (not tool bugs)
 - 19 REAL clashes in the clash report: pairs of panels that do NOT share a joint but occupy the
   same space => the model has features thinner than 2*T = 8 mm there. Biggest: 5.5 x 6.9 (967 mm^3)
