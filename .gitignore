@@ -4,6 +4,12 @@ _*.html
 _*.png
 *.log
 
+# python bytecode from syntax-checking the Rhino scripts
+__pycache__/
+
+# exported progress snapshots - working files, not source
+assembly-progress-*.json
+
 # OS
 Thumbs.db
 .DS_Store

@@ -4,7 +4,10 @@
 
    Bump CACHE when any precached file changes — that is what triggers the update. */
 
-const CACHE = 'assembly-guide-v1';
+/* v2: the progress store key changed and the recut work landed in index.html.
+   Bump again for the assembly_data.js regeneration if that ships as a second
+   deploy - an unbumped cache serves the old data forever on a bad-wifi phone. */
+const CACHE = 'assembly-guide-v2';
 
 const PRECACHE = [
   './',

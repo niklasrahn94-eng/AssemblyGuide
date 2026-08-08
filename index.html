@@ -18,6 +18,7 @@
   --fg:#e9ecf1; --fg2:#a4adba; --fg3:#6e7885;
   --raw:#b9b1a3; --bev:#4a9eda; --glue:#4caf7d; --focus:#ff8c3a;
   --warn:#ffb020; --bad:#ff5c5c; --jig:#c86ff0;
+  --recut:#e364d6;                  /* magenta, same as the Recut layer in Rhino */
   --tap:52px;                       /* min tap target - dusty hands, shop light */
   --safeT:env(safe-area-inset-top,0px);
   --safeB:env(safe-area-inset-bottom,0px);
@@ -91,6 +92,9 @@ input,textarea,select{font:inherit;color:inherit}
 .bldchip .sub{font-weight:400;font-size:11px;color:var(--fg3);margin-left:5px}
 .bldchip[aria-pressed="true"]{background:#2b3444;border-color:var(--focus);color:var(--fg)}
 .bldchip.done .sub{color:var(--glue)}
+.bldchip.recut{color:var(--recut)}
+.bldchip.recut .sub{color:var(--recut)}
+.bldchip.recut[aria-pressed="true"]{background:#3a1436;border-color:var(--recut);color:#f7c8f1}
 
 /* legend */
 .legend{position:absolute;left:8px;top:8px;z-index:5;display:flex;flex-direction:column;gap:3px;
@@ -143,7 +147,18 @@ input,textarea,select{font:inherit;color:inherit}
 .statebtn[aria-pressed="true"].bev small{color:#8ec4ee}
 .statebtn[aria-pressed="true"].glue{background:#12331f;border-color:var(--glue);color:#c1f0d6}
 .statebtn[aria-pressed="true"].glue small{color:#84cfa4}
+.statebtn.recut{border-color:#5c2c58}
+.statebtn[aria-pressed="true"].recut{background:#3a1436;border-color:var(--recut);color:#f7c8f1}
+.statebtn[aria-pressed="true"].recut small{color:#d69ccd}
 .statebtn:disabled{opacity:.45}
+
+/* sheet toggle over the board map */
+.sheettabs{display:flex;gap:8px;margin-bottom:8px}
+.sheettab{
+  flex:1;min-height:38px;border-radius:10px;border:1.5px solid var(--line);
+  background:var(--bg2);color:var(--fg2);font-weight:650;font-size:13px
+}
+.sheettab[aria-pressed="true"]{background:var(--bg3);border-color:var(--recut);color:var(--fg)}
 
 /* edge rows */
 .edgerow{
@@ -199,6 +214,7 @@ input,textarea,select{font:inherit;color:inherit}
 .bar{height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;flex:none}
 .bar > i{display:block;height:100%;background:var(--glue);border-radius:3px}
 .bar.bev > i{background:var(--bev)}
+.bar.recut > i{background:var(--recut)}
 
 .searchwrap{padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--line);flex:none;
   display:flex;gap:8px}
@@ -268,6 +284,7 @@ details.acc > .body{padding:0 12px 12px}
         <span><i class="sw" style="background:var(--raw)"></i>raw</span>
         <span><i class="sw" style="background:var(--bev)"></i>bevelled</span>
         <span><i class="sw" style="background:var(--glue)"></i>glued</span>
+        <span id="legRecut" hidden><i class="sw" style="background:var(--recut)"></i>needs re-cut</span>
       </div>
     </div>
   </section>
@@ -386,13 +403,64 @@ D.warnings.forEach(function(w){
    1.  progress store
    ===================================================================== */
 function djb2(s){ var h = 5381; for(var i=0;i<s.length;i++) h = ((h<<5) + h + s.charCodeAt(i)) | 0; return (h>>>0).toString(36); }
-var DATA_HASH = djb2([D.meta.model, D.meta.generated, PARTS.length, PLATES.length, ALL_WORK].join('|'));
-var STORE_KEY = 'assemblyGuide.v1.' + DATA_HASH;
 
-var PROG = {}, storageOK = true, lastSaved = null;
+/* The key must depend on WHAT this data contains, never on when it was built.
+   It used to include D.meta.generated - a build timestamp - so every re-export
+   moved the key and orphaned every tick already made in the workshop under a key
+   nothing reads again. Key on the set of part ids: that is the only thing whose
+   change would actually invalidate a saved record. */
+var STORE_PREFIX = 'assemblyGuide.v1.';
+var DATA_HASH = djb2(PARTS.map(function(p){ return p.id; }).sort().join(',') + '|' + PLATES.length);
+var STORE_KEY = STORE_PREFIX + DATA_HASH;
+
+var PROG = {}, storageOK = true, lastSaved = null, adopted = null;
+/* whether the one-time recut reconciliation has already run against this store -
+   see reconcileRecut() */
+var recutResetDone = false;
+
+/* One-time rescue for progress written under the old timestamped key. Runs only
+   when the current key holds nothing, so it can never overwrite live progress:
+   take the newest store whose part ids all exist in this model, adopt it, and
+   write it straight back out under the current key. The old entry is left in
+   place as a backup. */
+function adoptOrphanedProgress(){
+  var best = null, bestKey = null, i, k, o;
+  for(i = 0; i < localStorage.length; i++){
+    k = localStorage.key(i);
+    if(!k || k.indexOf(STORE_PREFIX) !== 0) continue;
+    if(k === STORE_KEY || /\.probe$/.test(k)) continue;
+    try{ o = JSON.parse(localStorage.getItem(k)); }catch(e){ continue; }
+    if(!o || !o.parts || typeof o.parts !== 'object') continue;
+    var ids = Object.keys(o.parts);
+    if(!ids.length) continue;
+    /* only adopt a record that is about THIS model - every id it names must exist */
+    if(!ids.every(function(id){ return !!BYID[id]; })) continue;
+    if(!best || (o.savedAt || '') > (best.savedAt || '')){ best = o; bestKey = k; }
+  }
+  if(!best) return null;
+  PROG = best.parts;
+  lastSaved = best.savedAt || null;
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      v:1, model:D.meta.model, generated:D.meta.generated, dataHash:DATA_HASH,
+      savedAt:lastSaved, parts:PROG, migratedFrom:bestKey
+    }));
+  }catch(e){ /* full or blocked: PROG is still adopted for this session */ }
+  var n = Object.keys(PROG).length;
+  if(window.console && console.log)
+    console.log('[assemblyGuide] adopted ' + n + ' parts of saved progress from ' + bestKey +
+                ' (saved ' + (lastSaved || 'unknown') + ') -> ' + STORE_KEY);
+  return { key:bestKey, parts:n, savedAt:lastSaved };
+}
+
 try{
   var raw = localStorage.getItem(STORE_KEY);
-  if(raw){ var o = JSON.parse(raw); PROG = o.parts || {}; lastSaved = o.savedAt || null; }
+  if(raw){
+    var o = JSON.parse(raw);
+    PROG = o.parts || {}; lastSaved = o.savedAt || null;
+    recutResetDone = !!o.recutReset;
+  }
+  else adopted = adoptOrphanedProgress();
   localStorage.setItem(STORE_KEY + '.probe','1'); localStorage.removeItem(STORE_KEY + '.probe');
 }catch(err){ storageOK = false; }
 
@@ -404,7 +472,7 @@ function writeStore(){
   try{
     localStorage.setItem(STORE_KEY, JSON.stringify({
       v:1, model:D.meta.model, generated:D.meta.generated, dataHash:DATA_HASH,
-      savedAt:lastSaved, parts:PROG
+      savedAt:lastSaved, recutReset:recutResetDone, parts:PROG
     }));
   }catch(err){ storageOK = false; toast('Storage is full or blocked — export your progress.'); }
 }
@@ -420,10 +488,61 @@ document.addEventListener('visibilitychange', function(){
 });
 function rec(id){
   var r = PROG[id];
-  if(!r){ r = PROG[id] = { b:false, g:false, n:'', e:{} }; }
+  if(!r){ r = PROG[id] = { b:false, g:false, n:'', e:{}, recut:false }; }
   if(!r.e) r.e = {};
   return r;
 }
+/* ---- undersize blanks -------------------------------------------------
+   52 panels were milled from the face outline instead of the miter silhouette,
+   so the piece on the board is smaller than the part. Four are short by under
+   half a millimetre and sand out; the other 48 need a new blank off the Recut
+   sheet before any of the sanding numbers mean anything. */
+function isUndersize(p){ return !!(p.blank && p.blank.status === 'undersize'); }
+function needsRecut(p){ return isUndersize(p) && !p.blank.ignorable; }
+function isRecut(p){ var r = PROG[p.id]; return !!(r && r.recut); }
+function setRecut(p,val){ rec(p.id).recut = !!val; save(); afterStateChange(p); }
+var RECUT = ALL.filter(needsRecut);
+/* Work already ticked off on a piece that turns out to be scrap. Not cleared -
+   that is his call - but it has to be said out loud on the card. */
+function sandedScrap(p){ return needsRecut(p) && !isRecut(p) && (isBevelled(p) || edgesDone(p) > 0); }
+/* Only lock the sanding ticks on a part he has not touched yet. Locking one that
+   already carries ticks would leave him unable to correct them. */
+function recutGate(p){ return needsRecut(p) && !isRecut(p) && !sandedScrap(p); }
+
+/* ---- one-time reconciliation --------------------------------------------
+   Ticks made before the undersize blanks came to light were made on pieces that
+   are now scrap. That work has to be done again on the new blank, so it must not
+   read as done - and old progress arriving later must not put it back.
+
+   Runs ONCE per store, marked by `recutReset` in the saved record, because it is
+   destructive: if it ran on every load it would wipe the sanding he does on a new
+   blank whenever he had not yet ticked `new blank cut`. Importing a file clears
+   the mark deliberately - that file carries the same stale ticks back in.
+
+   Nothing is lost: the pre-migration record is still under its old key, and the
+   exported backup file is untouched. */
+function reconcileRecut(){
+  if(!RECUT.length || recutResetDone) return null;
+  var cleared = [], ticks = 0;
+  RECUT.forEach(function(p){
+    var r = PROG[p.id];
+    if(!r || r.recut) return;                 // already cut a new blank: leave it alone
+    var n = r.e ? Object.keys(r.e).length : 0;
+    if(!r.b && !n) return;
+    ticks += n;
+    r.b = false;
+    r.e = {};
+    cleared.push(p.id);
+  });
+  recutResetDone = true;
+  writeStore();
+  if(window.console && console.log)
+    console.log('[assemblyGuide] recut reconciliation: cleared sanding on ' + cleared.length +
+                ' scrap pieces (' + ticks + ' edge ticks) — ' + (cleared.join(', ') || 'none'));
+  return cleared.length ? { parts:cleared, ticks:ticks } : null;
+}
+var recutReset = null;
+
 function edgeDone(p,n){ var r = PROG[p.id]; return !!(r && (r.b || (r.e && r.e[n]))); }
 function isBevelled(p){
   var w = workEdges(p);
@@ -507,10 +626,12 @@ var renderer, scene, camera, controls, raycaster, MESH = {}, CX, CY, CZ, MODEL_R
 var hiTube = null, dirty = true, camAnim = null;
 var showContext = true;              // on the part card: draw the rest of the building
 var bldFilter = null;                // screen A: only this building solid
+var recutFilter = false;             // screen A: only the parts waiting on a new blank
 
 var COL = {
   raw:0xb9b1a3, bev:0x4a9eda, glue:0x4caf7d, plate:0x77808d,
-  focus:0xff8c3a, ghost:0x8a94a3
+  focus:0xff8c3a, ghost:0x8a94a3,
+  recut:0xe364d6                     /* still waiting on a new blank */
 };
 
 function W(p){ return new THREE.Vector3(p[0]-CX, p[2]-CZ, -(p[1]-CY)); }
@@ -592,6 +713,9 @@ function buildScene(){
 /* -------------------------------------------------- appearance by state */
 function stateColour(p){
   if(isPlate(p)) return isGlued(p) ? COL.glue : COL.plate;
+  /* a part still waiting on a new blank reads as recut whatever else is ticked -
+     nothing downstream of it is real yet */
+  if(needsRecut(p) && !isRecut(p)) return COL.recut;
   if(isGlued(p))    return COL.glue;
   if(isBevelled(p)) return COL.bev;
   return COL.raw;
@@ -610,7 +734,8 @@ function applyStyles(){
       else                                          role = showContext ? 'ghost' : 'hidden';
       if(isPlate(p) && !showContext && !isGlued(p)) role = 'ghost';
     }else{
-      if(bldFilter && !(isPlate(p) ? false : p.building === bldFilter)) role = 'ghost';
+      if(recutFilter && !needsRecut(p)) role = 'ghost';
+      else if(bldFilter && !(isPlate(p) ? false : p.building === bldFilter)) role = 'ghost';
       else role = 'solid';
     }
 
@@ -702,6 +827,7 @@ function frameBox(box, pad, instant){
 }
 function frameAll(instant){
   bldFilter = null;
+  recutFilter = false;
   frameBox(boxOf(ALL.map(function(p){ return p.id; })), 1.12, instant);
   renderBldStrip();
 }
@@ -762,7 +888,8 @@ function svgOpen(x0,y0,w,h){
   return '<svg viewBox="' + fmt(x0,2) + ' ' + fmt(y0,2) + ' ' + fmt(w,2) + ' ' + fmt(h,2) +
          '" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">';
 }
-var KINDCOL = { plain:'#5cb3ef', flip:'#ffc75a', jig:'#d9a2ff', both:'#ff9ac4', sq:'#4d545e' };
+var KINDCOL = { plain:'#5cb3ef', flip:'#ffc75a', jig:'#d9a2ff', both:'#ff9ac4', sq:'#4d545e',
+                recut:'#e364d6' };   /* the strip of blank that was never there */
 
 /* ---- the flat true shape, every edge annotated ---- */
 function flatSVG(part, selEdge){
@@ -798,6 +925,24 @@ function flatSVG(part, selEdge){
   var d = o.map(function(p,ix){ return (ix?'L':'M') + fmt(X(p),2) + ' ' + fmt(Y(p),2); }).join(' ') + ' Z';
   s += '<path d="' + d + '" fill="#1c2028" stroke="none"/>';
 
+  /* The outline above is the TRUE blank. If this part was milled undersize, draw
+     what the CNC actually cut inside it and hatch the difference: that strip is
+     the whole reason the piece has to be made again, and this is the only place
+     he can see which edge it is missing from. */
+  var mo = part.flat.milledOutline;
+  if(mo && mo.length > 2){
+    var dm = mo.map(function(p,ix){ return (ix?'L':'M') + fmt(X(p),2) + ' ' + fmt(Y(p),2); }).join(' ') + ' Z';
+    var pitch = Math.max(big*0.028, 1e-3);
+    s += '<defs><pattern id="shortfall" width="' + fmt(pitch,3) + '" height="' + fmt(pitch,3) +
+         '" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+         '<line x1="0" y1="0" x2="0" y2="' + fmt(pitch,3) + '" stroke="' + KINDCOL.recut +
+         '" stroke-width="' + fmt(pitch*0.30,3) + '"/></pattern></defs>';
+    /* even-odd: the ring between the true blank and the milled shape */
+    s += '<path d="' + d + ' ' + dm + '" fill-rule="evenodd" fill="url(#shortfall)"/>';
+    s += '<path d="' + dm + '" fill="none" stroke="' + KINDCOL.recut + '" stroke-width="' +
+         fmt(big*0.005,3) + '" stroke-dasharray="' + fmt(big*0.022,3) + ' ' + fmt(big*0.016,3) + '"/>';
+  }
+
   var edges = isPlate(part) ? [] : part.edges;
   edges.forEach(function(e){
     var a = e.flatSeg[0], b = e.flatSeg[1];
@@ -832,11 +977,17 @@ function flatSVG(part, selEdge){
   return s;
 }
 
-/* ---- where the piece is on the CNC board ---- */
-function boardSVG(part){
-  if(!part.board || !part.board.sheet) return null;
-  var bm = D.boardMaps[part.board.sheet];
+/* ---- where the piece is on the CNC board ----
+   `sheet` names which map to draw: the board the piece was originally milled on,
+   or the Recut sheet carrying its replacement. On the original board an undersize
+   piece is drawn grey and labelled scrap rather than orange - it is still there,
+   it is just not the piece to pick up. */
+function boardSVG(part, sheet){
+  sheet = sheet || (part.board && part.board.sheet);
+  if(!sheet) return null;
+  var bm = D.boardMaps[sheet];
   if(!bm) return null;
+  var scrap = (sheet !== 'Recut') && needsRecut(part);
   var b = bm.bbox, w = b[2]-b[0], h = b[3]-b[1], m = Math.max(w,h)*0.03;
   function X(p){ return p[0]; }
   function Y(p){ return (b[1]+b[3]) - p[1]; }   // flip inside the sheet: SVG y grows down
@@ -867,15 +1018,25 @@ function boardSVG(part){
          fmt(Math.max(w,h)*0.0022,2)+'"/>';
   });
   if(mine){
-    s += '<path d="'+poly(mine.pts)+'" fill="#ff8c3a" fill-opacity="0.9" stroke="#ffd7b0" stroke-width="'+
-         fmt(Math.max(w,h)*0.005,2)+'"/>';
+    var hl   = scrap ? '#6b7280' : (sheet === 'Recut' ? '#e364d6' : '#ff8c3a');
+    var edge = scrap ? '#8b95a3' : (sheet === 'Recut' ? '#ffcdf6' : '#ffd7b0');
+    var ring = hl;
+    var dash = scrap
+      ? ' stroke-dasharray="'+fmt(Math.max(w,h)*0.012,2)+' '+fmt(Math.max(w,h)*0.009,2)+'"'
+      : '';
+    s += '<path d="'+poly(mine.pts)+'" fill="'+hl+'" fill-opacity="'+(scrap ? '0.35' : '0.9')+
+         '" stroke="'+edge+'" stroke-width="'+fmt(Math.max(w,h)*0.005,2)+'"'+dash+'/>';
     var mx = 0, my = 0;
     mine.pts.forEach(function(p){ mx += p[0]; my += p[1]; });
     mx /= mine.pts.length; my /= mine.pts.length;
     /* a leader ring so it is findable at a glance on an 850 mm sheet */
     s += '<circle cx="'+fmt(X([mx,my]),1)+'" cy="'+fmt(Y([mx,my]),1)+'" r="'+fmt(Math.max(w,h)*0.075,1)+
-         '" fill="none" stroke="#ff8c3a" stroke-width="'+fmt(Math.max(w,h)*0.0035,2)+
+         '" fill="none" stroke="'+ring+'" stroke-width="'+fmt(Math.max(w,h)*0.0035,2)+
          '" stroke-opacity="0.55"/>';
+    if(scrap)
+      s += '<text x="'+fmt(X([mx,my]),1)+'" y="'+fmt(Y([mx,my]) - Math.max(w,h)*0.095,1)+
+           '" fill="#c9d1dc" font-size="'+fmt(Math.max(w,h)*0.045,1)+
+           '" font-weight="800" text-anchor="middle" dominant-baseline="central">scrap</text>';
   }
   s += '</svg>';
   return s;
@@ -901,10 +1062,11 @@ function readHash(){
   return { name:name, id:id };
 }
 var selEdge = null;
+var boardView = null;                // which sheet the card's board map is showing
 function applyRoute(){
   var prev = route;
   route = readHash();
-  if(route.name !== 'part' || route.id !== prev.id) selEdge = null;
+  if(route.name !== 'part' || route.id !== prev.id){ selEdge = null; boardView = null; }
 
   Object.keys(SCREENS).forEach(function(k){
     el(SCREENS[k]).hidden = (k !== route.name);
@@ -955,13 +1117,17 @@ function bldStats(b){
   return { glued:g, bevelled:bv, total:b.partIds.length };
 }
 function renderBldStrip(){
-  var s = '<button class="bldchip" data-b="" aria-pressed="' + String(!bldFilter) + '">All' +
+  var s = '<button class="bldchip" data-b="" aria-pressed="' + String(!bldFilter && !recutFilter) + '">All' +
           '<span class="sub">' + ALL.filter(isGlued).length + '/' + ALL.length + '</span></button>';
+  if(RECUT.length)
+    s += '<button class="bldchip recut" data-b="recut" aria-pressed="' + String(recutFilter) +
+         '">re-cut<span class="sub">' + RECUT.filter(function(p){ return !isRecut(p); }).length +
+         '/' + RECUT.length + '</span></button>';
   D.buildings.slice().sort(function(a,b){ return a.partIds.length - b.partIds.length; })
     .forEach(function(b){
       var st = bldStats(b);
       s += '<button class="bldchip' + (st.glued === st.total ? ' done' : '') + '" data-b="' + esc(b.id) +
-           '" aria-pressed="' + String(bldFilter === b.id) + '">' + esc(b.id) +
+           '" aria-pressed="' + String(bldFilter === b.id && !recutFilter) + '">' + esc(b.id) +
            '<span class="sub">' + st.glued + '/' + st.total + '</span></button>';
     });
   el('bldStrip').innerHTML = s;
@@ -973,6 +1139,15 @@ function renderBldStrip(){
 el('bldStrip').addEventListener('click', function(ev){
   var b = ev.target.closest('.bldchip'); if(!b) return;
   var id = b.dataset.b || null;
+  if(id === 'recut'){
+    recutFilter = !recutFilter;
+    bldFilter = null;
+    applyStyles(); renderBldStrip();
+    if(recutFilter) frameBox(boxOf(RECUT.map(function(p){ return p.id; })), 1.25);
+    else frameBox(boxOf(ALL.map(function(p){ return p.id; })), 1.12);
+    return;
+  }
+  recutFilter = false;
   bldFilter = (bldFilter === id) ? null : id;
   applyStyles(); renderBldStrip();
   if(bldFilter) frameBox(boxOf(BLD[bldFilter].partIds), 1.3);
@@ -984,6 +1159,30 @@ el('bldStrip').addEventListener('click', function(ev){
    ===================================================================== */
 function partAlerts(p){
   var a = [];
+  if(isUndersize(p)){
+    var bl = p.blank;
+    var eds = (bl.edges || []).map(function(n){ return 'e' + n; }).join(', ');
+    var was = p.board && p.board.sheet ? p.board.sheet.replace('FinalCNCBoard','Board ') : 'the board';
+    if(bl.ignorable){
+      a.push(['info','◱','Blank is ' + fmt(bl.shortBy,2) + ' mm small on ' + eds,
+        'The nest was cut from the face outline, so the mitered corner runs a fraction past the ' +
+        'piece you have. At ' + fmt(bl.shortBy,2) + ' mm that is sanding tolerance — use it as is, ' +
+        'do not re-cut.']);
+    }else{
+      a.push(['bad','✕','The piece on ' + was + ' is UNDERSIZE by ' + fmt(bl.shortBy,2) + ' mm — do not use it',
+        'It was nested from the face outline, but at ' + eds + ' the inner face runs ' +
+        fmt(bl.shortBy,2) + ' mm past that outline, so the blank was milled too small. Cut a new ' +
+        'one from the Recut sheet below. The piece on ' + was + ' is scrap.']);
+      if(isRecut(p))
+        a.push(['info','✓','New blank cut','You have ticked this one off the Recut sheet. ' +
+          'The numbers below apply to the new piece.']);
+    }
+    if(sandedScrap(p))
+      a.push(['warn','↺','These ticks were made on the piece that is now scrap',
+        'This part was already ' + (isBevelled(p) ? 'sanded' : 'part-sanded') +
+        ' before the undersize blanks were found. The work has to be done again on the new blank — ' +
+        'clear the ticks below when you cut it.']);
+  }
   if(p.flags && p.flags.indexOf('notNested') >= 0)
     a.push(['bad','⚠','This part is not on either board','It was never nested — there is no piece to fetch. It still has to be made from offcut before you can bevel or glue it.']);
   if(p.flags && p.flags.indexOf('fallback') >= 0)
@@ -1033,14 +1232,22 @@ function renderCard(){
   });
 
   /* state */
-  h += '<div class="sec"><div class="states">' +
-       '<button class="statebtn bev" id="sbBev" aria-pressed="' + String(isBevelled(p)) + '"' +
-         (w.length ? '' : ' disabled') + '>' +
+  var gate = recutGate(p);
+  h += '<div class="sec"><div class="states">';
+  if(needsRecut(p))
+    h += '<button class="statebtn recut" id="sbRecut" aria-pressed="' + String(isRecut(p)) + '">new blank cut ✓' +
+         '<small>from the Recut sheet</small></button>';
+  h += '<button class="statebtn bev" id="sbBev" aria-pressed="' + String(isBevelled(p)) + '"' +
+         (w.length && !gate ? '' : ' disabled') + '>' +
          (w.length ? 'bevelled ✓' : 'no bevels') +
          '<small>' + (w.length ? donec + ' of ' + w.length + ' edges' : 'square as milled') + '</small></button>' +
        '<button class="statebtn glue" id="sbGlue" aria-pressed="' + String(isGlued(p)) + '">glued ✓' +
          '<small>' + (plate ? 'plate placed' : 'in the model') + '</small></button>' +
-       '</div></div>';
+       '</div>';
+  if(gate)
+    h += '<div class="drawnote">Sanding is locked until the new blank is cut — there is nothing ' +
+         'to sand yet. Tick <b>new blank cut</b> once you have it off the Recut sheet.</div>';
+  h += '</div>';
 
   /* flat shape */
   h += '<div class="sec"><h2>Flat true shape</h2><div class="draw">' + flatSVG(p, selEdge) + '</div>' +
@@ -1065,18 +1272,45 @@ function renderCard(){
   }
 
   /* board */
+  var recutPlace = (p.blank && p.blank.sheet === 'Recut') ? p.blank : null;
   h += '<div class="sec"><h2>Where to find it</h2>';
-  if(p.board && p.board.sheet){
-    var sheetName = p.board.sheet.replace('FinalCNCBoard','Board ');
+  if((p.board && p.board.sheet) || recutPlace){
+    /* an undersize part opens on the Recut sheet - that is where the piece he
+       actually needs is - with the original board one tap away */
+    var sheets = [];
+    if(recutPlace) sheets.push('Recut');
+    if(p.board && p.board.sheet) sheets.push(p.board.sheet);
+    if(needsRecut(p) === false && sheets.length > 1) sheets.reverse();
+    var cur = (boardView && sheets.indexOf(boardView) >= 0) ? boardView : sheets[0];
+    var onRecut = (cur === 'Recut');
+
+    if(sheets.length > 1){
+      h += '<div class="sheettabs">' + sheets.map(function(sn){
+        return '<button class="sheettab" data-sheet="' + esc(sn) + '" aria-pressed="' +
+               String(sn === cur) + '">' +
+               (sn === 'Recut' ? 'Recut sheet' : sn.replace('FinalCNCBoard','Board ') +
+                 (needsRecut(p) ? ' (scrap)' : '')) + '</button>';
+      }).join('') + '</div>';
+    }
+
+    var place = onRecut ? recutPlace : p.board;
     h += '<div class="panel pad" style="margin-bottom:8px"><div class="kv"><span>sheet</span><span>' +
-         esc(sheetName) + '</span></div><div class="kv"><span>position</span><span>x ' +
-         fmt(p.board.x,1) + ' &nbsp; y ' + fmt(p.board.y,1) + '</span></div>' +
-         '<div class="kv"><span>lies on the board</span><span>' +
-         (p.board.mirrored ? 'mirrored — outer face DOWN' : 'outer face UP') + '</span></div></div>';
-    var bs = boardSVG(p);
+         (onRecut ? 'Recut sheet' : esc(place.sheet.replace('FinalCNCBoard','Board '))) +
+         '</span></div><div class="kv"><span>position</span><span>x ' +
+         fmt(place.x,1) + ' &nbsp; y ' + fmt(place.y,1) + '</span></div>' +
+         '<div class="kv"><span>lies on the sheet</span><span>' +
+         (place.mirrored ? 'mirrored — outer face DOWN' : 'outer face UP') + '</span></div></div>';
+    var bs = boardSVG(p, cur);
     if(bs) h += '<div class="draw">' + bs + '</div>' +
-         '<div class="drawnote">This piece in orange. Dashed red outlines are the 11 leftover curves ' +
-         'from an earlier version of the model — milled into the board, but not parts. Do not use them.</div>';
+         '<div class="drawnote">' + (onRecut
+           ? 'The corrected blank, in magenta, on the small recut block. Everything on this sheet ' +
+             'is a replacement for a piece that was milled too small.'
+           : (needsRecut(p)
+              ? 'This piece is greyed out and marked <b>scrap</b> — it was milled too small. ' +
+                'The replacement is on the Recut sheet.'
+              : 'This piece in orange. Dashed red outlines are the 11 leftover curves ' +
+                'from an earlier version of the model — milled into the board, but not parts. ' +
+                'Do not use them.')) + '</div>';
   }else{
     h += '<div class="alert bad"><span class="ico">⚠</span><span><b>Not on any board</b>' +
          'This part still has to be made.</span></div>';
@@ -1108,7 +1342,8 @@ function edgeRow(p,e){
   return '<div class="edgerow' + (done ? ' done' : '') + (selEdge === e.n ? ' sel' : '') +
          '" data-edge="' + e.n + '">' +
     (e.needsWork
-      ? '<button class="tick" data-tick="' + e.n + '" aria-pressed="' + String(done) + '">✓</button>'
+      ? '<button class="tick" data-tick="' + e.n + '" aria-pressed="' + String(done) + '"' +
+        (recutGate(p) ? ' disabled' : '') + '>✓</button>'
       : '<span class="tick" style="border-style:dashed;opacity:.4"></span>') +
     '<span class="chip k-' + k + '">' + esc(e.needsWork ? e.label : 'sq') + '</span>' +
     '<span class="meta"><b>e' + e.n + ' · ' + fmt(e.len,1) + ' mm</b>' +
@@ -1120,6 +1355,8 @@ el('cardBody').addEventListener('click', function(ev){
   var p = BYID[route.id]; if(!p) return;
   var t;
   if((t = ev.target.closest('[data-goto]'))){ go('part', t.dataset.goto); return; }
+  if((t = ev.target.closest('[data-sheet]'))){ boardView = t.dataset.sheet; renderCard(); return; }
+  if((t = ev.target.closest('#sbRecut'))) { setRecut(p, !isRecut(p)); return; }
   if((t = ev.target.closest('#sbBev')))  { setBevelled(p, !isBevelled(p)); return; }
   if((t = ev.target.closest('#sbGlue'))) { setGlued(p, !isGlued(p)); return; }
   if((t = ev.target.closest('[data-tick]'))){
@@ -1159,7 +1396,8 @@ function partRow(p){
           : 'building ' + p.building + ' · ' + (w ? dn + '/' + w + ' bevels' : 'no bevels') +
             (isGlued(p) ? ' · glued' : '');
   var flag = '';
-  if(p.flags && p.flags.indexOf('notNested') >= 0) flag = '<span class="badge bad">not on a board</span>';
+  if(needsRecut(p) && !isRecut(p)) flag = '<span class="badge bad">needs re-cut</span>';
+  else if(p.flags && p.flags.indexOf('notNested') >= 0) flag = '<span class="badge bad">not on a board</span>';
   else if(STALE_BOARD.indexOf(p.id) >= 0) flag = '<span class="badge warn">board labels wrong</span>';
   return '<button class="row" data-goto="' + esc(p.id) + '">' +
     '<span class="dot" style="background:' + col + '"></span>' +
@@ -1288,11 +1526,39 @@ function renderProgress(){
   }
 
   var h = '<div class="sec"><h2>Where you are</h2><div class="panel pad">' +
+    (RECUT.length ? barRow('new blanks cut', RECUT.filter(isRecut).length, RECUT.length, 'recut') : '') +
     barRow('bevels sanded', bevEdges, ALL_WORK, 'bev') +
     barRow('parts fully bevelled', bevParts, PARTS.length, 'bev') +
     barRow('parts glued', glued, ALL.length) +
     barRow('buildings finished', bldDone, D.buildings.length) +
     '</div></div>';
+
+  if(RECUT.length){
+    var todo = RECUT.filter(function(p){ return !isRecut(p); });
+    var scrapped = RECUT.filter(sandedScrap);
+    h += '<div class="sec"><h2>Re-cuts outstanding</h2><div class="panel">' +
+      '<div class="drawnote" style="padding:10px 12px 0">' + RECUT.length + ' panels were milled ' +
+      'from the face outline instead of the miter silhouette, so the blanks came out too small. ' +
+      'The pieces on the boards are scrap; new ones are on the Recut sheet. ' +
+      'Sanding recorded against a scrap piece has been cleared — that work has to be done again ' +
+      'on the new blank, and importing an older file will not bring it back.' +
+      (recutReset ? ' <b>' + recutReset.parts.length + '</b> ' +
+        (recutReset.parts.length === 1 ? 'part was' : 'parts were') + ' reset this way: ' +
+        esc(recutReset.parts.join(', ')) + '.' : '') +
+      (scrapped.length ? ' <b>' + scrapped.length + '</b> still carry ticks made before the new ' +
+        'blank was cut.' : '') + '</div>' +
+      (todo.length ? todo.map(function(p){
+        return '<button class="row" data-goto="' + esc(p.id) + '">' +
+          '<span class="dot" style="background:var(--recut)"></span>' +
+          '<span class="grow"><span class="id">' + esc(p.id) + '</span>' +
+          (sandedScrap(p) ? '<span class="badge warn">already sanded</span>' : '') +
+          '<br><span class="sub">short by ' + fmt(p.blank.shortBy,2) + ' mm · was on ' +
+          esc((p.board && p.board.sheet ? p.board.sheet : '—').replace('FinalCNCBoard','Board ')) +
+          '</span></span><span style="color:var(--fg3)">›</span></button>';
+        }).join('')
+        : '<div class="row"><span class="sub">All ' + RECUT.length + ' new blanks are cut.</span></div>') +
+      '</div></div>';
+  }
 
   h += '<div class="sec"><h2>Backup</h2><div class="panel pad">' +
     '<div class="drawnote" style="padding:0 0 10px">' +
@@ -1396,24 +1662,40 @@ el('importFile').addEventListener('change', function(ev){
     var known   = Object.keys(parts).length - unknown.length;
     var msg = 'Import ' + known + ' parts?';
     if(o.dataHash && o.dataHash !== DATA_HASH)
-      msg += '\n\nWarning: this file was made against a different export of the model.';
+      msg += unknown.length
+        ? '\n\nWarning: this file was made against a different export of the model.'
+        : '\n\nThis file was exported by an earlier version of the tool. Every part id in ' +
+          'it exists here, so it will import cleanly.';
     if(unknown.length)
       msg += '\n\n' + unknown.length + ' ids in the file are not in this model and will be skipped:\n' +
              unknown.slice(0,8).join(', ') + (unknown.length > 8 ? ' …' : '');
     msg += '\n\nThis replaces what is currently saved.';
+    if(RECUT.length)
+      msg += '\n\nYour "new blank cut" ticks are kept, and sanding recorded against ' +
+             'the ' + RECUT.length + ' scrap pieces will not be restored.';
     if(!confirm(msg)) { ev.target.value = ''; return; }
     var next = {};
     Object.keys(parts).forEach(function(id){
       if(!BYID[id]) return;
       var s = parts[id] || {};
-      next[id] = { b:!!s.b, g:!!s.g, n:typeof s.n === 'string' ? s.n : '', e:s.e || {} };
+      /* `recut` is the one field that is NOT replaced: a file exported before the
+         undersize blanks were found has no such key, and letting it read as false
+         would lose the record of blanks he has already cut. */
+      next[id] = { b:!!s.b, g:!!s.g, n:typeof s.n === 'string' ? s.n : '', e:s.e || {},
+                   recut:!!(s.recut || (PROG[id] && PROG[id].recut)) };
       /* a file written before per-edge ticks existed: expand the part flag */
       if(next[id].b && !Object.keys(next[id].e).length)
         workEdges(BYID[id]).forEach(function(e){ next[id].e[e.n] = 1; });
     });
-    PROG = next; save();
+    PROG = next;
+    /* the file brings the stale ticks back with it, so let the reconciliation
+       take them out again */
+    recutResetDone = false;
+    save();
+    recutReset = reconcileRecut();
     applyStyles(); renderBldStrip(); renderProgress();
-    toast('Imported ' + known + ' parts.');
+    toast('Imported ' + known + ' parts' +
+          (recutReset ? ', ' + recutReset.parts.length + ' scrap pieces reset.' : '.'));
     ev.target.value = '';
   };
   fr.readAsText(f);
@@ -1471,6 +1753,7 @@ el('hudCtx').addEventListener('click', function(){
   applyStyles();
 });
 el('hudCtx').classList.add('on');
+el('legRecut').hidden = (RECUT.length === 0);
 
 window.addEventListener('resize', function(){ requestAnimationFrame(resize); });
 window.addEventListener('orientationchange', function(){ setTimeout(resize, 250); });
@@ -1497,6 +1780,8 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
 }
 
 try{
+  /* before anything is drawn, so no screen ever shows a scrap piece as sanded */
+  recutReset = reconcileRecut();
   buildScene();
   el('boot').hidden = true;
   el('app').hidden = false;
@@ -1510,6 +1795,12 @@ try{
   if(!storageOK) setTimeout(function(){
     toast('This browser will not save progress — use Export on the Progress tab.');
   }, 1200);
+  else if(adopted) setTimeout(function(){
+    toast('Recovered ' + adopted.parts + ' parts of earlier progress.');
+  }, 1200);
+  if(recutReset) setTimeout(function(){
+    toast(recutReset.parts.length + ' sanded parts turned out to be scrap — their ticks are cleared.');
+  }, 2600);
 }catch(err){
   el('boot').innerHTML = '<div style="padding:24px;text-align:center;color:#ffb4b4">' +
     'Could not start the 3D view.<br><br><code style="font-size:11px">' + esc(err.message) + '</code></div>';
