@@ -251,3 +251,36 @@ note it in `MiterPanels_HANDOFF.md` as a known issue.
   this is the §2a trap
 - **on the phone:** progress from before the deploy is still there, the new banner shows,
   and it still works with wifi off
+
+---
+
+## 8. Corrections found while implementing this (2026-08-08)
+
+Three things in the sections above and in the reports are wrong. Recorded so the next
+person does not re-derive them.
+
+- **`Recut::Outlines` holds 53 curves, not 52.** The 53rd is a **frame** drawn round the
+  whole block (970.8 x 400 at -54.5, 2554.6, area 388 340 mm²) and it contains every one
+  of the 52 label dots. §4's advice to "read the label dot inside each curve" is right,
+  but nearest-dot matching hands that frame a part id and shifts other pairings one place
+  along - a clean 1:1 assignment that passes a duplicate check and is completely wrong.
+  Match each dot to the **smallest** curve containing it, then discard curves no dot
+  claimed. Two dots (`2.3`, `6.25`) sit inside *nothing but* the frame, because those
+  silhouettes are concave and the label was placed at the middle of the bounding box,
+  which on an L or a U is outside the shape - those fall back to the nearest unclaimed
+  curve whose bbox still contains them.
+- **The block is 837 x 290 mm**, as §4 says. `Recut_Sheet_REPORT.txt`'s "208 x 290" is
+  wrong. Measured over the 52 real curves: **836.9 x 289.5 at (0, 2600), 79 276.9 mm²**,
+  which does match that report's area figure.
+- **The "machined" column of `Recut_Sheet_REPORT.txt` disagrees with the boards** on 23
+  of the 52. The board curves in `Final::FinalCNCBoard1/2` are what was physically cut,
+  and they match each part's face outline (129 of 135 nested parts within 1 mm²); e.g.
+  `5.4` measures 2790.0 on the board and 2789.7 as a face outline, against that column's
+  2438.1. Trust the board curves. The "true" column is fine - it agrees with the
+  silhouettes on 49 of 52 within 1 mm².
+
+One more thing §2b does not mention: the reentrant test needs a floor. A fold of 90.01°
+is square for every practical purpose, but `T/tan(bevel)` still returns a positive
+number, which put `5.3`, `8.2` and `8.5` on the recut list with a 0.00 mm shortfall and
+no outline on the sheet. Ignoring overhangs below 0.05 mm gives exactly the 52 / 48 / 4
+in the reports.

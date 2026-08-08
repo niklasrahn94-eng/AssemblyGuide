@@ -1687,6 +1687,15 @@ el('importFile').addEventListener('change', function(ev){
       if(next[id].b && !Object.keys(next[id].e).length)
         workEdges(BYID[id]).forEach(function(e){ next[id].e[e.n] = 1; });
     });
+    /* and carry the recut ticks across for parts the file does not mention AT ALL.
+       A backup taken before the undersize blanks were found has no record of a
+       part he has since cut a new blank for, so keying this off the file's own
+       part list silently loses it. */
+    Object.keys(PROG).forEach(function(id){
+      if(!BYID[id] || !PROG[id].recut) return;
+      if(next[id]) next[id].recut = true;
+      else next[id] = { b:false, g:false, n:'', e:{}, recut:true };
+    });
     PROG = next;
     /* the file brings the stale ticks back with it, so let the reconciliation
        take them out again */

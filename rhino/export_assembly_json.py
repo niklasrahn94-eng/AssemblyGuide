@@ -60,6 +60,7 @@ FIT_MAYBE  = 1.50
 RECUT_OUTLINES = "Recut::Outlines"
 RECUT_LABELS   = "Recut::Labels"
 IGNORABLE_MM   = 0.5      # below this the shortfall sands away; call it out, do not re-cut
+OVERHANG_EPS   = 0.05     # below this it is not geometry, it is a bevel a hair off 90
 SIL_SNAP       = 5.0      # how far a silhouette may sit from its own face outline
 
 UTF8 = System.Text.UTF8Encoding(False)     # no BOM - a BOM breaks `# coding:`
@@ -567,7 +568,12 @@ for r in part_rows:
         t = math.tan(math.radians(b))
         if abs(t) < 1e-9:
             continue
-        over.append((e["n"], abs(T_in / t)))
+        a = abs(T_in / t)
+        # a fold of 90.01 deg is square for every practical purpose; flagging it
+        # would put parts on the recut list with a 0.00 mm shortfall
+        if a < OVERHANG_EPS:
+            continue
+        over.append((e["n"], a))
     if r["silRaw"]:
         r["sil"] = moved(r["silRaw"], r["xform"]) if READING == "world" else r["silRaw"]
     if not over:
@@ -809,38 +815,100 @@ say("")
 say("RECUT SHEET  (%s / %s)" % (RECUT_OUTLINES, RECUT_LABELS))
 say("  closed outlines : %d      label dots: %d" % (len(recut_crvs), len(recut_dots)))
 
-# match each outline to the dot sitting in it. These dots were placed by the recut
-# pass, one per curve, so nearest-centre is unambiguous - but check that, rather
-# than assume it: a silently swapped pair would send him to the wrong blank.
-recut_pairs = []
-used = set()
-for c in recut_crvs:
-    bb = c.GetBoundingBox(True)
-    cx = (bb.Min.X + bb.Max.X) * 0.5
-    cy = (bb.Min.Y + bb.Max.Y) * 0.5
-    ranked = sorted(range(len(recut_dots)),
-                    key=lambda i: math.hypot(recut_dots[i].Point.X - cx,
-                                             recut_dots[i].Point.Y - cy))
-    pick = None
-    for i in ranked:
-        if i not in used:
-            pick = i
-            break
-    if pick is None:
+# Match each dot to the SMALLEST closed curve that contains it.
+#
+# Not nearest-centre: the layer also carries a frame drawn round the whole block,
+# and that frame contains every dot. Nearest-centre hands the frame a part id and
+# shifts other pairings one place along - a 1:1 assignment that passes a duplicate
+# check and is completely wrong, which is the worst kind of wrong here because it
+# sends him to someone else's blank. Every dot sits inside its own silhouette and
+# inside the frame, so "smallest containing curve" picks the silhouette every time.
+PL_XY = rg.Plane.WorldXY
+
+
+def curve_contains(c, pt):
+    try:
+        return c.Contains(pt, PL_XY, 0.01) == rg.PointContainment.Inside
+    except Exception:
+        return False
+
+
+recut_areas = [area_of(c) for c in recut_crvs]
+recut_bbs = [c.GetBoundingBox(True) for c in recut_crvs]
+
+# stage 1: the dot sits inside its own silhouette, and the smallest curve
+# containing it is that silhouette rather than the frame
+claim = {}                                   # curve index -> [dot index]
+pick_of = {}                                 # dot index -> curve index
+for di, d in enumerate(recut_dots):
+    inside = [ci for ci in range(len(recut_crvs))
+              if curve_contains(recut_crvs[ci], d.Point)]
+    if not inside:
         continue
-    used.add(pick)
-    recut_pairs.append((recut_dots[pick].Text.strip().replace("*", ""), c))
+    ci = min(inside, key=lambda i: recut_areas[i] if recut_areas[i] > 0 else 1e18)
+    pick_of[di] = ci
+    claim.setdefault(ci, []).append(di)
+
+# stage 2: a curve that wins several dots is the frame, not a part. Those dots
+# belong to CONCAVE silhouettes - the label sits at the middle of the bounding
+# box, which on an L or a U is outside the shape - so they are inside nothing
+# else. Release them and let stage 3 place them.
+loose = []
+for ci in [k for k in claim if len(claim[k]) > 1]:
+    for di in claim[ci]:
+        pick_of.pop(di, None)
+        loose.append(di)
+    del claim[ci]
+
+# stage 3: nearest unclaimed curve whose bounding box still contains the dot
+for di in loose:
+    d = recut_dots[di]
+    best, bd = None, 1e18
+    for ci in range(len(recut_crvs)):
+        if ci in claim:
+            continue
+        bb = recut_bbs[ci]
+        if not (bb.Min.X - 0.01 <= d.Point.X <= bb.Max.X + 0.01 and
+                bb.Min.Y - 0.01 <= d.Point.Y <= bb.Max.Y + 0.01):
+            continue
+        rc, t = recut_crvs[ci].ClosestPoint(d.Point)
+        if not rc:
+            continue
+        dist = recut_crvs[ci].PointAt(t).DistanceTo(d.Point)
+        if dist < bd:
+            bd, best = dist, ci
+    if best is None:
+        continue
+    pick_of[di] = best
+    claim.setdefault(best, []).append(di)
 
 recut_of = {}
+recut_curve_ix = {}
 dupes = []
-for (pid_s, c) in recut_pairs:
-    if pid_s in recut_of:
+homeless = []
+for di, d in enumerate(recut_dots):
+    pid_s = d.Text.strip().replace("*", "").replace("?", "")
+    ci = pick_of.get(di)
+    if ci is None:
+        homeless.append(pid_s)
+        continue
+    if pid_s in recut_of or len(claim.get(ci, [])) > 1:
         dupes.append(pid_s)
-    recut_of[pid_s] = c
+    recut_of[pid_s] = recut_crvs[ci]
+    recut_curve_ix[pid_s] = ci
 
+frames = [c for i, c in enumerate(recut_crvs) if i not in set(recut_curve_ix.values())]
+say("  paired by containment: %d      by nearest curve (dot in a concave notch): %d"
+    % (len(recut_of) - len(loose), len(loose)))
 recut_unknown = sorted([i for i in recut_of if i not in row_of])
 say("  matched to a part id : %d      duplicate ids: %d      ids not in the model: %d %s"
     % (len(recut_of), len(dupes), len(recut_unknown), ",".join(recut_unknown) or ""))
+say("  dots inside no curve : %d %s      curves with no dot (frame/annotation): %d"
+    % (len(homeless), ",".join(homeless) or "", len(frames)))
+if dupes:
+    System.IO.File.WriteAllText(REPORT, "\r\n".join(RPT), UTF8)
+    raise Exception("Recut labels do not pair 1:1 with outlines (%s) - see %s"
+                    % (",".join(sorted(set(dupes))), REPORT))
 
 undersize_ids = sorted([r["id"] for r in part_rows if r["blank"]],
                        key=lambda s: [int(x) for x in s.split(".")] if "." in s else [999])
@@ -944,7 +1012,9 @@ if undersize_ids:
                        "the originals are scrap. The other %d are short by less than %.1f mm and "
                        "sand out." % (len(undersize_ids), n_needed,
                                       len(undersize_ids) - n_needed, IGNORABLE_MM))
-if missing_recut:
+missing_needed = [i for i in missing_recut if not row_of[i]["blank"]["ignorable"]]
+if missing_needed:
+    missing_recut = missing_needed
     warnings.insert(1, "No corrected outline is baked for %s, so %s not on the Recut sheet even "
                        "though the piece on the board is too small. Cut %s by hand from the "
                        "dimensions on the part card."
